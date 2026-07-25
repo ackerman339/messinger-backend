@@ -1,0 +1,9 @@
+# Hoist ESLint and its plugins to root node_modules so they are accessible as CLI tools
+publicHoistPattern:
+  - '*eslint*'
+  - '*prettier*'
+  - '*types*'
+  - '*globals*'
+
+# Do not fail on peer dependency version conflicts
+strictPeerDependencies: false
