@@ -1,3 +1,9 @@
+allowBuilds:
+  '@scarf/scarf': true
+  bcrypt: true
+  esbuild: true
+  msgpackr-extract: true
+
 # Hoist ESLint and its plugins to root node_modules so they are accessible as CLI tools
 publicHoistPattern:
   - '*eslint*'
