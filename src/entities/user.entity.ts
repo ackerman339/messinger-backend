@@ -1,0 +1,89 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  OneToMany,
+  Index,
+} from 'typeorm';
+
+import { UserRole, UserStatus } from '@appTypes';
+import { Session } from './user-session.entity';
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({
+    type: 'varchar',
+    length: 100,
+  })
+  username: string;
+
+  @Column({
+    type: 'text',
+  })
+  loginKeyHash: string;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    unique: true,
+  })
+  loginKeyLookup: string;
+
+  @Column({
+    type: 'varchar',
+    length: 10,
+    unique: true,
+  })
+  userCode: string;
+
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  avatarUrl: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 50,
+  })
+  role: UserRole;
+
+  @Column({
+    type: 'varchar',
+    length: 50,
+    default: UserStatus.ACTIVE,
+  })
+  status: UserStatus;
+
+  @Index('idx_last_seen_at')
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  lastSeenAt: Date | null;
+
+  @CreateDateColumn({
+    type: 'timestamptz',
+  })
+  createdAt: Date;
+
+  @UpdateDateColumn({
+    type: 'timestamptz',
+  })
+  updatedAt: Date;
+
+  @DeleteDateColumn({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  deletedAt: Date | null;
+
+  @OneToMany(() => Session, (session) => session.user)
+  sessions: Session[];
+}
