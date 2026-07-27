@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { add, Duration } from 'date-fns';
 import { env } from '@config/environment';
@@ -29,15 +30,18 @@ function parseExpiry(expiry: string): Duration {
 
 export const SessionRepository = AppDataSource.getRepository(Session).extend({
   async createSession({ user, roles, userAgent, ipAddress }: CreateSessionParams) {
-    const accessToken = jwt.sign({ sub: user.id, roles }, env.JWT_SECRET, {
+    const sessionId = randomUUID();
+
+    const accessToken = jwt.sign({ sub: user.id, roles, sid: sessionId }, env.JWT_SECRET, {
       expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
     });
 
-    const refreshToken = jwt.sign({ sub: user.id, roles }, env.JWT_REFRESH_SECRET, {
+    const refreshToken = jwt.sign({ sub: user.id, roles, sid: sessionId }, env.JWT_REFRESH_SECRET, {
       expiresIn: env.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'],
     });
 
     const newSession = this.create({
+      id: sessionId,
       user,
       refreshTokenHash: hashToken(refreshToken),
       expiresAt: add(new Date(), parseExpiry(env.JWT_REFRESH_EXPIRES_IN)),

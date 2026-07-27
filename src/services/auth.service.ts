@@ -1,11 +1,18 @@
+import { IncomingMessage } from 'node:http';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { env } from '@config/environment';
 import { SessionRevokeReason } from '@appTypes';
 import { SignUpDto, SignInDto } from '@dtos';
 import { NotFoundException, UnauthorizedException } from '@exceptions';
 import { SessionRepository, UserRepository } from '@repositories';
 import { USER_CODE_LENGTH, LOGIN_KEY_LENGTH } from '@constants';
-import { hashToken, generateRandomString, generateLoginKeyLookup } from '@utils';
+import {
+  hashToken,
+  generateRandomString,
+  generateLoginKeyLookup,
+  parseWebSocketCookies,
+} from '@utils';
 
 class AuthService {
   private async hashLoginKey(key: string) {
@@ -78,6 +85,44 @@ class AuthService {
     }
 
     await SessionRepository.revokeSession(session.id, SessionRevokeReason.LOGOUT);
+  }
+
+  async authenticateWsConnection(req: IncomingMessage) {
+    const cookies = await parseWebSocketCookies(req);
+    const accessToken = cookies.accessToken;
+    let payload: jwt.JwtPayload;
+
+    try {
+      payload = jwt.verify(accessToken, env.JWT_SECRET) as jwt.JwtPayload;
+    } catch {
+      throw new UnauthorizedException('INVALID_ACCESS_TOKEN');
+    }
+
+    const sessionId = payload.sid as string | undefined;
+
+    if (!sessionId) {
+      throw new UnauthorizedException('INVALID_ACCESS_TOKEN');
+    }
+
+    const session = await SessionRepository.findOne({
+      where: {
+        id: sessionId,
+      },
+    });
+
+    if (!session) {
+      throw new UnauthorizedException('INVALID_SESSION');
+    }
+
+    if (session.isRevoked) {
+      throw new UnauthorizedException('SESSION_REVOKED');
+    }
+
+    if (session.expiresAt < new Date()) {
+      throw new UnauthorizedException('EXPIRED_SESSION');
+    }
+
+    return { userId: session.id, sessionId };
   }
 }
 

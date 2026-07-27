@@ -1,6 +1,7 @@
 import { Server } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { logger } from '@config/logger';
+import { authService } from '@services';
 import { connectionManager } from './connection-manager';
 import { parseWsMessage } from './message-parser';
 import { registerEventHandlers } from './register-event-handlers';
@@ -16,7 +17,7 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
     server,
   });
 
-  ws.on('connection', async (socket) => {
+  ws.on('connection', async (socket, req) => {
     const connection = connectionManager.register(socket);
 
     logger.info(
@@ -24,7 +25,12 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
     );
 
     try {
-      logger.info(`[WS] Authenticated connection (${connection.id})`);
+      const { userId, sessionId } = await authService.authenticateWsConnection(req);
+      connection.userId = userId;
+      connection.sessionId = sessionId;
+      connectionManager.attachUser(connection, userId);
+
+      logger.info(`[WS] Authenticated connection (${connection.id}) user=${userId}`);
     } catch (error) {
       logger.error(error);
       socket.close(1008, 'Authentication failed');
