@@ -1,0 +1,21 @@
+export const WS_CLIENT_EVENTS = {
+  SEND_MESSAGE: 'SEND_MESSAGE',
+  /*   MESSAGE_READ: 'MESSAGE_READ',
+  TYPING: 'TYPING',
+  STOP_TYPING: 'STOP_TYPING',
+  OFFER: 'OFFER',
+  ANSWER: 'ANSWER',
+  ICE_CANDIDATE: 'ICE_CANDIDATE', */
+} as const;
+
+export const WS_SERVER_EVENTS = {
+  MESSAGE_SENT: 'MESSAGE_SENT',
+  NEW_MESSAGE: 'NEW_MESSAGE',
+  /*   MESSAGE_READ: 'MESSAGE_READ',
+  USER_ONLINE: 'USER_ONLINE',
+  USER_OFFLINE: 'USER_OFFLINE', */
+  ERROR: 'ERROR',
+} as const;
+
+export type WsClientEvent = (typeof WS_CLIENT_EVENTS)[keyof typeof WS_CLIENT_EVENTS];
+export type WsServerEvent = (typeof WS_SERVER_EVENTS)[keyof typeof WS_SERVER_EVENTS];
