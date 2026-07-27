@@ -1,5 +1,8 @@
 import 'reflect-metadata';
+import { createServer } from 'node:http';
+
 import app from './app';
+import { createWebSocketServer } from './websocket/websocket-server';
 import { AppDataSource } from '@config/database';
 import { env } from '@config/environment';
 import { logger } from '@config/logger';
@@ -16,8 +19,15 @@ const startServer = async () => {
     // Start cron jobs
     startJobs();
 
-    // Init Server
-    app.listen(env.PORT, () => {
+    // HTTP server
+    const server = createServer(app);
+
+    // WS server
+    createWebSocketServer({
+      server,
+    });
+
+    server.listen(env.PORT, () => {
       logger.info(`Server running on port ${env.PORT}`);
       logger.info(`Environment: ${env.NODE_ENV}`);
     });
