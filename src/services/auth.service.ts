@@ -122,7 +122,7 @@ class AuthService {
       throw new UnauthorizedException('WS_AUTH:EXPIRED_SESSION');
     }
 
-    return { userId: session.id, sessionId };
+    return { userId: session.userId, sessionId };
   }
 }
 
