@@ -33,7 +33,7 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
       logger.info(`[WS] Authenticated connection (${connection.id}) user=${userId}`);
     } catch (error) {
       logger.error(error);
-      socket.close(1008, 'Authentication failed');
+      sendError(connection, error);
     }
 
     socket.on('message', async (raw) => {
