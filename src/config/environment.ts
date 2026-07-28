@@ -62,10 +62,20 @@ const envSchema = z.object({
   // Hashing
   SALT_ROUNDS: z.coerce.number().int().positive(),
 
+  // HMAC
   LOGIN_KEY_SECRET: z
     .string()
     .length(128, 'LOGIN_KEY_SECRET must be 128 hex characters (64 bytes) for HMAC signing')
     .regex(/^[0-9a-f]+$/i, 'LOGIN_KEY_SECRET must be a valid hexadecimal string'),
+
+  //Message encryption
+  MESSAGE_ENCRYPTION_KEY: z
+    .string()
+    .regex(
+      /^[0-9a-fA-F]{64}$/,
+      'APP_ENCRYPTION_KEY must be a 64-character hexadecimal string (32 bytes)'
+    )
+    .transform((value) => Buffer.from(value, 'hex')),
 
   // Pagination
   DEFAULT_PAGE_SIZE: z.coerce.number().int().positive(),
