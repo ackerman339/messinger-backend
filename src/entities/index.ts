@@ -1,2 +1,6 @@
 export * from './user.entity';
 export * from './user-session.entity';
+export * from './message.entity';
+export * from './conversation-member.entity';
+export * from './conversation.entity';
+export * from './message-delivery.entity';
