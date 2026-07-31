@@ -67,7 +67,11 @@
       "@scripts": ["./src/scripts/index"],
       "@scripts/*": ["./src/scripts/*"],
       "@utils": ["./src/utils/index"],
-      "@utils/*": ["./src/utils/*"]
+      "@utils/*": ["./src/utils/*"],
+      "@websocket": ["./src/websocket/index"],
+      "@websocket/*": ["./src/websocket/*"],
+      "@events": ["./src/events/index"],
+      "@events/*": ["./src/events/*"]
     },
     "types": ["vitest/globals", "node"]
   }
