@@ -2,7 +2,7 @@ import { WsHandlers } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
 import { MessageDeliverySchema, MessageDeliveryDto } from '@dtos';
 import { messageService } from '@services';
-import { connectionManager } from '../connection-manager';
+import { connectionManager } from '../managers/connection-manager';
 import { requireAuthentication } from '../authenticate-guard';
 import { sendMessage } from '../send-message';
 
