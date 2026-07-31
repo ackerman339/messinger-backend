@@ -2,7 +2,8 @@ import 'reflect-metadata';
 import { createServer } from 'node:http';
 
 import app from './app';
-import { createWebSocketServer } from './websocket/websocket-server';
+import { createWebSocketServer } from '@websocket/websocket-server';
+import { registerGroupListeners } from '@events';
 import { AppDataSource } from '@config/database';
 import { env } from '@config/environment';
 import { logger } from '@config/logger';
@@ -15,6 +16,9 @@ const startServer = async () => {
       await AppDataSource.initialize();
       logger.info('Database connected successfully');
     }
+
+    // Register server events
+    registerGroupListeners();
 
     // Start cron jobs
     startJobs();
