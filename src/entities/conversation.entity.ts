@@ -10,6 +10,7 @@ import {
 import { ConversationType } from '@appTypes';
 import { ConversationMember } from './conversation-member.entity';
 import { Message } from './message.entity';
+import { ConversationEvent } from './conversation-event.entity';
 
 @Entity('conversations')
 export class Conversation {
@@ -47,6 +48,9 @@ export class Conversation {
 
   @OneToMany(() => Message, (message) => message.conversation)
   messages: Message[];
+
+  @OneToMany(() => ConversationEvent, (event) => event.conversation)
+  events: ConversationEvent[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

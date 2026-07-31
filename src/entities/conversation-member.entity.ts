@@ -22,6 +22,22 @@ export class ConversationMember {
   })
   role: ConversationRole;
 
+  // use in private to hide conversation without
+  // delete in DB
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  softDeletedAt: Date | null;
+
+  // use in private to restore a conversation and
+  // not show previous messages
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  restoredAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
