@@ -28,7 +28,7 @@ class MessageService {
     };
   }
 
-  private decipherMessage(encryptedContent: string, iv: string, authTag: string) {
+  decipherMessage(encryptedContent: string, iv: string, authTag: string) {
     const decipher = createDecipheriv(
       'aes-256-gcm',
       env.MESSAGE_ENCRYPTION_KEY,

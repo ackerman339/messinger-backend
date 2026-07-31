@@ -1,9 +1,9 @@
+import { addHours, isAfter } from 'date-fns';
 import { AppDataSource } from '@config/database';
 import { createHash } from 'node:crypto';
 import { ConversationType, ConversationRole, ConversationEventType } from '@appTypes';
 import { ForbiddenException, NotFoundException } from '@exceptions';
 import { groupEvents } from '@events';
-import { memberInvitationManager } from '@websocket/managers/member-invitation-manager';
 
 import {
   CreateGroupDto,
@@ -17,6 +17,7 @@ import {
   ConversationRepository,
   ConversationMemberRepository,
   ConversationEventRepository,
+  GroupInvitationRepository,
 } from '@repositories';
 
 type CreateConversationParams = {
@@ -195,65 +196,83 @@ class ConversationService {
       throw new ForbiddenException('GROUP_INVITATION:USER_ALREADY_MEMBER');
     }
 
-    memberInvitationManager.add(targetUserId, conversation.id);
+    await GroupInvitationRepository.createInvitation({
+      conversationId,
+      actorId,
+      targetId: targetUserId,
+      expiresAt: addHours(new Date(), 24),
+    });
 
     return conversation;
   }
 
   async acceptGroupInvitation(conversationId: string, userId: string) {
-    if (!memberInvitationManager.has(userId, conversationId)) {
-      throw new ForbiddenException('GROUP_INVITATION:NOT_FOUND');
-    }
-
-    const [conversation, member, members] = await Promise.all([
+    const [conversation, member, members, invitation] = await Promise.all([
       ConversationRepository.findById(conversationId),
       ConversationMemberRepository.findMember(conversationId, userId),
       ConversationRepository.getConversationMembers(conversationId),
+      GroupInvitationRepository.findOne({ where: { conversationId, targetId: userId } }),
     ]);
 
     if (!conversation) {
       throw new NotFoundException('GROUP:NOT_FOUND');
     }
 
-    if (member?.softDeletedAt) {
-      await ConversationMemberRepository.restoreConversation(conversationId, userId);
+    if (!invitation) {
+      throw new NotFoundException('GROUP_INVITATION:NOT_FOUND');
+    }
 
-      return { members };
+    if (isAfter(new Date(), invitation.expiresAt)) {
+      await GroupInvitationRepository.markInvitationAsExpired(conversationId, userId);
+      throw new ForbiddenException('GROUP_INVITATION:EXPIRED');
     }
 
     await AppDataSource.transaction(async (manager) => {
-      await ConversationMemberRepository.bulkCreate(
-        [
+      if (member?.softDeletedAt) {
+        await ConversationMemberRepository.restoreConversation(conversationId, userId, manager);
+      } else {
+        await GroupInvitationRepository.acceptInvitation(conversationId, userId, manager);
+
+        await ConversationEventRepository.createEvent(
           {
             conversationId,
-            userId,
-            role: ConversationRole.MEMBER,
+            actorId: userId,
+            type: ConversationEventType.MEMBER_JOINED,
           },
-        ],
-        manager
-      );
+          manager
+        );
 
-      await ConversationEventRepository.createEvent(
-        {
-          conversationId,
-          actorId: userId,
-          type: ConversationEventType.MEMBER_JOINED,
-        },
-        manager
-      );
+        await ConversationMemberRepository.bulkCreate(
+          [
+            {
+              conversationId,
+              userId,
+              role: ConversationRole.MEMBER,
+            },
+          ],
+          manager
+        );
+      }
     });
-
-    memberInvitationManager.remove(userId, conversationId);
 
     return { members };
   }
 
   async rejectGroupInvitation(conversationId: string, userId: string) {
-    if (!memberInvitationManager.has(userId, conversationId)) {
-      throw new ForbiddenException('GROUP_INVITATION:NOT_FOUND');
+    const invitation = await GroupInvitationRepository.findOne({
+      where: { conversationId, targetId: userId },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('GROUP_INVITATION:NOT_FOUND');
     }
 
-    memberInvitationManager.remove(userId, conversationId);
+    if (isAfter(new Date(), invitation.expiresAt)) {
+      await GroupInvitationRepository.markInvitationAsExpired(conversationId, userId);
+      throw new ForbiddenException('GROUP_INVITATION:EXPIRED');
+    }
+
+    await GroupInvitationRepository.rejectInvitation(conversationId, userId);
   }
 
   async leaveGroup(userId: string, conversationId: string) {

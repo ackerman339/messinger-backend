@@ -1,7 +1,7 @@
 import { Server } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { logger } from '@config/logger';
-import { authService } from '@services';
+import { authService, offlineSyncService } from '@services';
 import { connectionManager } from './managers/connection-manager';
 import { parseWsMessage } from './message-parser';
 import { registerEventHandlers } from './register-event-handlers';
@@ -29,6 +29,9 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
       connection.userId = userId;
       connection.sessionId = sessionId;
       connectionManager.attachUser(connection, userId);
+
+      await offlineSyncService.syncPendingMessages(userId);
+      await offlineSyncService.syncPendingGroupInvitations(userId);
 
       logger.info(`[WS] Authenticated connection (${connection.id}) user=${userId}`);
     } catch (error) {
