@@ -4,3 +4,4 @@ export * from './conversation.repository';
 export * from './conversation-member.repository';
 export * from './message.repository';
 export * from './message-delivery.repository';
+export * from './conversation-event.repository';

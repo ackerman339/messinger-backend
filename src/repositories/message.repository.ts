@@ -1,4 +1,4 @@
-import { EntityManager } from 'typeorm';
+import { EntityManager, MoreThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { Message } from '@entities';
 
@@ -23,13 +23,13 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
     });
   },
 
-  async findByConversation(conversationId: string) {
+  async findByConversation(conversationId: string, lastDeletedAt: Date | null) {
     return this.find({
       where: {
         conversationId,
-      },
-      relations: {
-        deliveries: true,
+        ...(lastDeletedAt && {
+          createdAt: MoreThan(lastDeletedAt),
+        }),
       },
       order: {
         createdAt: 'ASC',

@@ -32,4 +32,12 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
 
     return conversation.members;
   },
+
+  async deleteConversation(conversationId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(Conversation) : this;
+
+    await repository.delete({
+      id: conversationId,
+    });
+  },
 });

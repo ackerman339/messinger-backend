@@ -1,4 +1,4 @@
-import { EntityManager } from 'typeorm';
+import { EntityManager, IsNull } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { ConversationRole } from '@appTypes';
 import { ConversationMember } from '@entities';
@@ -21,6 +21,117 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
         userId: member.userId,
         role: member.role,
       }))
+    );
+  },
+
+  async getConversationsByUser(userId: string) {
+    return this.find({
+      where: {
+        userId,
+        softDeletedAt: IsNull(),
+      },
+      relations: {
+        conversation: true,
+      },
+      order: { createdAt: 'DESC' },
+    });
+  },
+
+  async findMember(conversationId: string, userId: string) {
+    return this.findOne({
+      where: {
+        conversationId,
+        userId,
+      },
+    });
+  },
+
+  async exists(conversationId: string, userId: string) {
+    return this.existsBy({
+      conversationId,
+      userId,
+      softDeletedAt: IsNull(),
+    });
+  },
+
+  async getRemainingConversations(conversationId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    return repository.count({
+      where: {
+        conversationId,
+        softDeletedAt: IsNull(),
+      },
+    });
+  },
+
+  async getMembers(conversationId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    return repository.find({
+      where: {
+        conversationId,
+        softDeletedAt: IsNull(),
+      },
+    });
+  },
+
+  async updateRole(
+    conversationId: string,
+    userId: string,
+    role: ConversationRole,
+    manager?: EntityManager
+  ) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    await repository.update(
+      {
+        conversationId,
+        userId,
+      },
+      {
+        role,
+      }
+    );
+  },
+
+  async removeMember(conversationId: string, userId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    const result = await repository.delete({
+      conversationId,
+      userId,
+    });
+
+    return result.affected ?? 0;
+  },
+
+  async markConversationAsDeleted(conversationId: string, userId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    await repository.update(
+      {
+        conversationId,
+        userId,
+      },
+      {
+        softDeletedAt: new Date(),
+      }
+    );
+  },
+
+  async restoreConversation(conversationId: string, userId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    await repository.update(
+      {
+        conversationId,
+        userId,
+      },
+      {
+        softDeletedAt: null,
+        restoredAt: new Date(),
+      }
     );
   },
 });
