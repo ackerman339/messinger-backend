@@ -33,7 +33,7 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
       relations: {
         conversation: true,
       },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'ASC' },
     });
   },
 
