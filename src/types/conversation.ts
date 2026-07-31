@@ -23,3 +23,10 @@ export enum ConversationEventType {
   MEMBER_REMOVED = 'MEMBER_REMOVED',
   OWNERSHIP_TRANSFERRED = 'OWNERSHIP_TRANSFERRED',
 }
+
+export enum GroupInvitationStatus {
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
+  EXPIRED = 'EXPIRED',
+}
