@@ -2,7 +2,7 @@ import { Server } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { logger } from '@config/logger';
 import { authService } from '@services';
-import { connectionManager } from './connection-manager';
+import { connectionManager } from './managers/connection-manager';
 import { parseWsMessage } from './message-parser';
 import { registerEventHandlers } from './register-event-handlers';
 import { sendError } from './send-error';
