@@ -32,6 +32,9 @@ const router = Router();
 router.get('/sign-in', validateDTO(signInSchema), signin);
 router.post('/sign-up', validateDTO(signUpSchema), signup);
 router.post('/logout', authenticate, logout);
+router.post('/refresh', authenticate, (_req, res) => {
+  res.sendStatus(204);
+});
 
 // Conversation endpoints
 router.get('/conversation', authenticate, getUserConversations);
