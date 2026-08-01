@@ -38,6 +38,12 @@ export class ConversationMember {
   })
   restoredAt: Date | null;
 
+  @Column({
+    type: 'integer',
+    default: 0,
+  })
+  unreadCount: number;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

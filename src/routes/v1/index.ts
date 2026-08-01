@@ -21,7 +21,7 @@ import {
   transferGroupOwnership,
   deleteGroup,
   deletePrivateConversation,
-  getUserConversations,
+  getConversationsList,
   getConversationMessages,
   removeGroupMember,
 } from '@controllers';
@@ -37,7 +37,7 @@ router.post('/refresh', authenticate, (_req, res) => {
 });
 
 // Conversation endpoints
-router.get('/conversation', authenticate, getUserConversations);
+router.get('/conversation-list', authenticate, getConversationsList);
 router.post('/conversation/leave-group', authenticate, validateDTO(LeaveGroupSchema), leaveGroup);
 router.get(
   '/conversation/messages',

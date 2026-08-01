@@ -40,4 +40,33 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
       id: conversationId,
     });
   },
+
+  async updateLastMessage(conversationId: string, messageId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(Conversation) : this;
+
+    await repository.update(
+      { id: conversationId },
+      {
+        lastMessageId: messageId,
+      }
+    );
+  },
+
+  async getConversationList(userId: string) {
+    return this.createQueryBuilder('conversation')
+      .innerJoin(
+        'conversation.members',
+        'currentMember',
+        `
+        currentMember.userId = :userId
+        AND currentMember.softDeletedAt IS NULL
+      `,
+        { userId }
+      )
+      .leftJoinAndSelect('conversation.lastMessage', 'lastMessage')
+      .leftJoinAndSelect('conversation.members', 'members')
+      .leftJoinAndSelect('members.user', 'user')
+      .orderBy('lastMessage.createdAt', 'DESC', 'NULLS LAST')
+      .getMany();
+  },
 });

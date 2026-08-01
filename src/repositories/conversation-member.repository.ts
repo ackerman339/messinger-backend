@@ -24,19 +24,6 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
     );
   },
 
-  async getConversationsByUser(userId: string) {
-    return this.find({
-      where: {
-        userId,
-        softDeletedAt: IsNull(),
-      },
-      relations: {
-        conversation: true,
-      },
-      order: { createdAt: 'ASC' },
-    });
-  },
-
   async findMember(conversationId: string, userId: string) {
     return this.findOne({
       where: {
@@ -131,6 +118,33 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
       {
         softDeletedAt: null,
         restoredAt: new Date(),
+      }
+    );
+  },
+
+  async incrementUnreadCount(conversationId: string, userId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    await repository.increment(
+      {
+        conversationId,
+        userId,
+      },
+      'unreadCount',
+      1
+    );
+  },
+
+  async resetUnreadCount(conversationId: string, userId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    await repository.update(
+      {
+        conversationId,
+        userId,
+      },
+      {
+        unreadCount: 0,
       }
     );
   },

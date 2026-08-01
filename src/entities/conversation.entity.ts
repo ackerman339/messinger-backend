@@ -5,6 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 
 import { ConversationType } from '@appTypes';
@@ -40,6 +42,20 @@ export class Conversation {
     default: ConversationType.PRIVATE,
   })
   type: ConversationType;
+
+  @Column({
+    type: 'uuid',
+    nullable: true,
+  })
+  lastMessageId: string | null;
+
+  @ManyToOne(() => Message, {
+    nullable: true,
+  })
+  @JoinColumn({
+    name: 'last_message_id',
+  })
+  lastMessage: Message | null;
 
   @OneToMany(() => ConversationMember, (member) => member.conversation, {
     cascade: true,

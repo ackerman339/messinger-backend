@@ -91,7 +91,20 @@ class MessageService {
           status: MessageStatus.SENT,
         }));
 
-      MessageDeliveryRepository.createDeliveries(deliveries, manager);
+      await MessageDeliveryRepository.createDeliveries(deliveries, manager);
+      await ConversationRepository.updateLastMessage(conversation.id, savedMessage.id, manager);
+
+      await Promise.all(
+        members
+          .filter((member) => member.userId !== senderId)
+          .map((member) =>
+            ConversationMemberRepository.incrementUnreadCount(
+              conversation.id,
+              member.userId,
+              manager
+            )
+          )
+      );
 
       return { id, senderId, conversationId, createdAt, content };
     });
@@ -148,6 +161,19 @@ class MessageService {
         }));
 
       await MessageDeliveryRepository.createDeliveries(deliveries, manager);
+      await ConversationRepository.updateLastMessage(conversation.id, savedMessage.id, manager);
+
+      await Promise.all(
+        members
+          .filter((member) => member.userId !== senderId)
+          .map((member) =>
+            ConversationMemberRepository.incrementUnreadCount(
+              conversation.id,
+              member.userId,
+              manager
+            )
+          )
+      );
 
       return {
         savedMessage: { id, createdAt, senderId, conversationId, content },
@@ -173,11 +199,15 @@ class MessageService {
     });
   }
 
-  async confirmDelivery(userId: string, { messageId, status }: MessageDeliveryDto) {
+  async confirmDelivery(userId: string, { conversationId, messageId, status }: MessageDeliveryDto) {
     const delivery = await MessageDeliveryRepository.findByMessageAndUser(messageId, userId);
 
     if (!delivery) {
       throw new NotFoundException('COMFIRM_DELIVERY:DELIVERY_NOT_FOUND');
+    }
+
+    if (status === MessageStatus.READ) {
+      await ConversationMemberRepository.resetUnreadCount(conversationId, userId);
     }
 
     await MessageDeliveryRepository.updateDeliveryStatus(delivery.id, {

@@ -9,9 +9,9 @@ import {
   GetConversationMessagesDto,
 } from '@dtos';
 
-export async function getUserConversations(_req: Request, res: Response) {
+export async function getConversationsList(_req: Request, res: Response) {
   const userId = res.locals.userId!;
-  const conversations = await conversationService.getUserConversations(userId);
+  const conversations = await conversationService.getConversationsList(userId);
 
   res.status(200).json({
     message: 'Conversations loaded',
