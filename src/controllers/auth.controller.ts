@@ -17,7 +17,7 @@ export async function signup(req: Request, res: Response) {
 
   res.status(201).json({
     message: 'User created successfully',
-    data: {
+    result: {
       username,
       status,
       loginKey,
@@ -35,7 +35,7 @@ export async function signin(req: Request, res: Response) {
 
   res.status(201).json({
     message: 'User logged successfully',
-    data: {
+    result: {
       username,
       status,
     },
@@ -51,5 +51,5 @@ export async function logout(req: Request, res: Response) {
 
   clearAuthCookies(res);
 
-  res.status(200).json({ message: 'Logged out successfully' });
+  res.sendStatus(204);
 }

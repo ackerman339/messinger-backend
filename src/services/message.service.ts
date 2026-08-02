@@ -4,12 +4,18 @@ import { AppDataSource } from '@config/database';
 import { MessageStatus, ConversationType } from '@appTypes';
 import { NotFoundException, ForbiddenException } from '@exceptions';
 import { conversationService } from '@services';
-import { PrivateMessageDto, GroupMessageDto, MessageDeliveryDto } from '@dtos';
+import {
+  PrivateMessageDto,
+  GroupMessageDto,
+  MessageDeliveryDto,
+  GetConversationMessagesDto,
+} from '@dtos';
 import {
   ConversationRepository,
   ConversationMemberRepository,
   MessageDeliveryRepository,
   MessageRepository,
+  ConversationEventRepository,
 } from '@repositories';
 
 class MessageService {
@@ -182,21 +188,47 @@ class MessageService {
     });
   }
 
-  async getConversationMessages(userId: string, conversationId: string) {
+  async getConversationMessages(
+    userId: string,
+    { conversationId, limit, cursor }: GetConversationMessagesDto
+  ) {
     const member = await ConversationMemberRepository.findMember(conversationId, userId);
-    const messages = await MessageRepository.findByConversation(
-      conversationId,
-      member?.softDeletedAt ?? null
-    );
 
-    return messages.map((message) => {
-      const { cipheredContent, iv, authTag, ...rest } = message;
-      const content = this.decipherMessage(cipheredContent, iv, authTag);
-      return {
-        ...rest,
-        content,
-      };
-    });
+    const [messages, events] = await Promise.all([
+      MessageRepository.findByConversation({
+        conversationId,
+        limit,
+        cursor,
+        lastDeletedAt: member?.softDeletedAt,
+      }),
+      ConversationEventRepository.findByConversation({ conversationId, limit, cursor }),
+    ]);
+
+    const history = [
+      ...messages.map((message) => {
+        const { cipheredContent, iv, authTag, ...rest } = message;
+        const content = this.decipherMessage(cipheredContent, iv, authTag);
+        return {
+          ...rest,
+          content,
+          type: 'MESSAGE',
+        };
+      }),
+      ...events,
+    ];
+
+    history.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    const page = history.slice(0, limit + 1);
+    const hasMore = page.length > limit;
+    const items = page.slice(0, limit);
+    const firstItem = items.at(0);
+    const nextCursor = hasMore ? firstItem?.id : null;
+
+    return {
+      items,
+      nextCursor,
+    };
   }
 
   async confirmDelivery(userId: string, { conversationId, messageId, status }: MessageDeliveryDto) {

@@ -15,18 +15,21 @@ export async function getConversationsList(_req: Request, res: Response) {
 
   res.status(200).json({
     message: 'Conversations loaded',
-    data: conversations,
+    result: conversations,
   });
 }
 
 export async function getConversationMessages(_req: Request, res: Response) {
   const dto = res.locals.validatedDto as GetConversationMessagesDto;
   const userId = res.locals.userId!;
-  const conversations = await messageService.getConversationMessages(userId, dto.conversationId);
+  const { items, nextCursor } = await messageService.getConversationMessages(userId, dto);
 
   res.status(200).json({
     message: 'Conversations loaded',
-    data: conversations,
+    result: {
+      items,
+      nextCursor,
+    },
   });
 }
 
@@ -37,7 +40,7 @@ export async function createGroup(_req: Request, res: Response) {
 
   res.status(201).json({
     message: 'Group created successfully',
-    data: {
+    result: {
       id: group.id,
       name: group.name,
     },
