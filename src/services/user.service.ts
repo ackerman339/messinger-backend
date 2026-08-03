@@ -22,6 +22,10 @@ class UserService {
 
     return user;
   }
+
+  async updateLastSeenAt(userId: string) {
+    return UserRepository.update({ id: userId }, { lastSeenAt: new Date() });
+  }
 }
 
 export const userService = new UserService();

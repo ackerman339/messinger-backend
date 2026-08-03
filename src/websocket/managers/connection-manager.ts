@@ -138,12 +138,17 @@ export function createConnectionManager() {
     return connections.size;
   }
 
+  function getAllConnections(): Connection[] {
+    return Array.from(connections.values());
+  }
+
   return {
     register,
     unregister,
     attachUser,
     getUserConnections,
     count,
+    getAllConnections,
   };
 }
 

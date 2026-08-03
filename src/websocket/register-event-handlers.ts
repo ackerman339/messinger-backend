@@ -7,6 +7,7 @@ import {
   InviteGroupMemberDto,
   GroupInvitationDto,
   GroupMessageDto,
+  TypingDto,
 } from '@dtos';
 
 import {
@@ -16,6 +17,7 @@ import {
   inviteGroupMemberHandler,
   acceptGroupInvitationHandler,
   rejectGroupInvitationHandler,
+  typingStartHandler,
 } from './handlers';
 
 /**
@@ -52,6 +54,7 @@ export function registerEventHandlers() {
   );
 
   dispatcher.register<GroupMessageDto>(WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE, groupMessageHandler);
+  dispatcher.register<TypingDto>(WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE, typingStartHandler);
 
   return dispatcher;
 }

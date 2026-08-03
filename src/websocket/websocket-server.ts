@@ -5,6 +5,7 @@ import { authService, offlineSyncService } from '@services';
 import { connectionManager } from './managers/connection-manager';
 import { parseWsMessage } from './message-parser';
 import { registerEventHandlers } from './register-event-handlers';
+import { presenceOnlineHandler, presenceOfflineHandler } from './handlers/presence-handler';
 import { sendError } from './send-error';
 
 export interface CreateWebSocketServerOptions {
@@ -30,6 +31,7 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
       connection.sessionId = sessionId;
       connectionManager.attachUser(connection, userId);
 
+      presenceOnlineHandler(connection);
       await offlineSyncService.syncPendingMessages(userId);
       await offlineSyncService.syncPendingGroupInvitations(userId);
 
@@ -50,7 +52,14 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
     });
 
     socket.on('close', () => {
+      const userId = connection.userId;
+      const wasLastConnection = userId && connectionManager.getUserConnections(userId).length === 1;
+
       connectionManager.unregister(connection.id);
+
+      if (wasLastConnection) {
+        presenceOfflineHandler(connection);
+      }
 
       logger.info(
         `[WS] Connection closed (${connection.id}) - Active: ${connectionManager.count()}`
