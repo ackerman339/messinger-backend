@@ -1,13 +1,45 @@
-# Stage 1: Base — pnpm
-FROM node:24-alpine AS base
+# Stage 1: Dependencies
+FROM node:24-alpine AS dependencies
+
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+
+RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
+
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
 RUN pnpm install --frozen-lockfile
+
+
+# Stage 2: Build
+FROM dependencies AS build
+
 COPY . .
 
-# Stage 2: Development
-FROM base AS development
-ENV NODE_ENV=development
+RUN pnpm build
+
+
+# Stage 3: Development
+FROM dependencies AS development
+
+COPY . .
+
 EXPOSE 3000
+
 CMD ["pnpm", "dev"]
+
+
+# Stage 4: Staging
+FROM node:24-alpine AS staging
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
+
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+
+EXPOSE 3000
+
+CMD ["pnpm", "start"]

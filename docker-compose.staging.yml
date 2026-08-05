@@ -3,54 +3,42 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
+      target: staging
+
     container_name: ${PROJECT_NAME:?PROJECT_NAME is not set in .env file}
+
     ports:
       - '3000:3000'
-    volumes:
-      - .:/app
-      - node_modules:/app/node_modules
+
     env_file:
       - .env
+
     depends_on:
       database:
         condition: service_healthy
 
+    restart: unless-stopped
+
   database:
     image: postgres:18-alpine
+
     container_name: ${DB_NAME:?DB_NAME is not set in .env file}
+
     environment:
       POSTGRES_USER: ${DB_USER:?DB_USER is not set in .env file}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is not set in .env file}
       POSTGRES_DB: ${DB_NAME:?DB_NAME is not set in .env file}
+
     volumes:
       - postgres-data:/var/lib/postgresql
-    ports:
-      - '5432:5432'
+
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
       interval: 10s
       timeout: 5s
       retries: 5
 
-  database_test:
-    image: postgres:18-alpine
-    container_name: ${DB_TEST_NAME:?DB_TEST_NAME is not set in .env file}
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_TEST_NAME:?DB_TEST_NAME is not set in .env file}
-    ports:
-      - '5433:5432'
-    volumes:
-      - postgres-test-data:/var/lib/postgresql
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_TEST_NAME}']
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    restart: unless-stopped
 
 volumes:
   postgres-data:
-  postgres-test-data:
-  node_modules:
