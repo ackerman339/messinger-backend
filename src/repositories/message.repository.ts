@@ -43,9 +43,11 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
           id: cursor,
           conversationId,
         },
+        relations: { attachments: true },
         select: {
           id: true,
           createdAt: true,
+          attachments: true,
         },
       });
     }
@@ -67,8 +69,11 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
 
     return this.find({
       where,
+      relations: {
+        attachments: true,
+      },
       order: {
-        createdAt: 'ASC',
+        createdAt: 'DESC',
       },
       take: limit + 1,
     });

@@ -12,7 +12,7 @@ export async function privateMessageHandler({
 }: WsHandlers<PrivateMessageDto>) {
   requireAuthentication(connection);
 
-  const { receiverId, content } = PrivateMessageSchema.parse(message.data);
+  const { receiverId, content, attachments } = PrivateMessageSchema.parse(message.data);
   const senderId = connection.userId;
 
   if (!senderId) {
@@ -22,6 +22,7 @@ export async function privateMessageHandler({
   const { savedMessage, members } = await messageService.createPrivateMessage(senderId, {
     receiverId,
     content,
+    attachments,
   });
 
   //Deliver message to conversation members.
@@ -40,8 +41,9 @@ export async function privateMessageHandler({
           senderId,
           content,
           messageId: savedMessage.id,
-          conversationId: savedMessage.conversationId,
+          conversation: savedMessage.conversation,
           createdAt: savedMessage.createdAt,
+          attachments: savedMessage.savedAttachments,
         },
       });
     }
@@ -51,8 +53,12 @@ export async function privateMessageHandler({
   sendMessage(connection, {
     type: WS_SERVER_EVENTS.MESSAGE_SENT,
     data: {
+      senderId,
+      content,
       messageId: savedMessage.id,
-      conversationId: savedMessage.conversationId,
+      conversation: savedMessage.conversation,
+      createdAt: savedMessage.createdAt,
+      attachments: savedMessage.savedAttachments,
     },
   });
 }

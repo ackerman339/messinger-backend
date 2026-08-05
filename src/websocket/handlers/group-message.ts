@@ -9,12 +9,13 @@ import { sendMessage } from '../send-message';
 export async function groupMessageHandler({ connection, message }: WsHandlers<GroupMessageDto>) {
   requireAuthentication(connection);
 
-  const { conversationId, content } = GroupMessageSchema.parse(message.data);
+  const { conversationId, content, attachments } = GroupMessageSchema.parse(message.data);
   const senderId = connection.userId!;
 
   const { savedMessage, members } = await messageService.createGroupMessage(senderId, {
     conversationId,
     content,
+    attachments,
   });
 
   for (const member of members) {
@@ -33,6 +34,7 @@ export async function groupMessageHandler({ connection, message }: WsHandlers<Gr
           conversationId,
           content: savedMessage.content,
           createdAt: savedMessage.createdAt,
+          attachments: savedMessage.savedAttachments,
         },
       });
     }
@@ -41,8 +43,12 @@ export async function groupMessageHandler({ connection, message }: WsHandlers<Gr
   sendMessage(connection, {
     type: WS_SERVER_EVENTS.MESSAGE_SENT,
     data: {
+      senderId,
       messageId: savedMessage.id,
       conversationId,
+      content: savedMessage.content,
+      createdAt: savedMessage.createdAt,
+      attachments: savedMessage.savedAttachments,
     },
   });
 }

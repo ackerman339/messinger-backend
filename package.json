@@ -31,6 +31,8 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1101.0",
+    "@aws-sdk/s3-request-presigner": "3.1101.0",
     "bcrypt": "6.0.0",
     "bullmq": "5.80.6",
     "compression": "1.8.1",

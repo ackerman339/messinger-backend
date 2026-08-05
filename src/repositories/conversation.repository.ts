@@ -18,7 +18,9 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
         privateKey,
       },
       relations: {
-        members: true,
+        members: {
+          user: true,
+        },
       },
     });
   },
@@ -66,7 +68,7 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
       .leftJoinAndSelect('conversation.lastMessage', 'lastMessage')
       .leftJoinAndSelect('conversation.members', 'members')
       .leftJoinAndSelect('members.user', 'user')
-      .orderBy('lastMessage.createdAt', 'DESC', 'NULLS LAST')
+      .orderBy('conversation.updatedAt', 'DESC', 'NULLS LAST')
       .getMany();
   },
 });

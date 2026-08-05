@@ -13,6 +13,7 @@ class UserService {
         status: true,
         createdAt: true,
         updatedAt: true,
+        role: true,
       },
     });
 
@@ -24,7 +25,17 @@ class UserService {
   }
 
   async updateLastSeenAt(userId: string) {
-    return UserRepository.update({ id: userId }, { lastSeenAt: new Date() });
+    const now = new Date();
+    await UserRepository.update({ id: userId }, { lastSeenAt: now });
+
+    return now;
+  }
+
+  async findUserByCode(userCode: string) {
+    return UserRepository.findOne({
+      where: { userCode },
+      select: { username: true, id: true },
+    });
   }
 }
 

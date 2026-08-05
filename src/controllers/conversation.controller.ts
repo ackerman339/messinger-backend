@@ -9,13 +9,13 @@ import {
   GetConversationMessagesDto,
 } from '@dtos';
 
-export async function getConversationsList(_req: Request, res: Response) {
+export async function getConversationsBootstrap(_req: Request, res: Response) {
   const userId = res.locals.userId!;
-  const conversations = await conversationService.getConversationsList(userId);
+  const conversations = await conversationService.getConversationBootstrap(userId);
 
   res.status(200).json({
     message: 'Conversations loaded',
-    result: conversations,
+    conversations,
   });
 }
 

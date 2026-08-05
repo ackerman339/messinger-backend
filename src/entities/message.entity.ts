@@ -11,6 +11,7 @@ import {
 import { User } from './user.entity';
 import { MessageDelivery } from './message-delivery.entity';
 import { Conversation } from './conversation.entity';
+import { MessageAttachment } from './message-attrachment.entity';
 
 @Entity('messages')
 export class Message {
@@ -63,4 +64,9 @@ export class Message {
     name: 'sender_id',
   })
   sender: User;
+
+  @OneToMany(() => MessageAttachment, (attachment) => attachment.message, {
+    cascade: true,
+  })
+  attachments: MessageAttachment[];
 }

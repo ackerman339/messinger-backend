@@ -100,6 +100,12 @@ const envSchema = z.object({
   ENABLE_RATE_LIMITING: booleanString.optional(),
   ENABLE_CACHING: booleanString.optional(),
   ENABLE_AUDIT_LOG: booleanString.optional(),
+
+  // R2
+  R2_ACCOUNT_ID: z.string().min(1),
+  R2_ACCESS_KEY_ID: z.string().min(1),
+  R2_SECRET_ACCESS_KEY: z.string().min(1),
+  R2_BUCKET_NAME: z.string().min(1),
 });
 
 export type Env = z.infer<typeof envSchema>;

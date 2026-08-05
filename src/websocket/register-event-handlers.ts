@@ -54,7 +54,8 @@ export function registerEventHandlers() {
   );
 
   dispatcher.register<GroupMessageDto>(WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE, groupMessageHandler);
-  dispatcher.register<TypingDto>(WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE, typingStartHandler);
+  dispatcher.register<TypingDto>(WS_CLIENT_EVENTS.TYPING_START, typingStartHandler);
+  dispatcher.register<TypingDto>(WS_CLIENT_EVENTS.TYPING_STOP, typingStartHandler);
 
   return dispatcher;
 }

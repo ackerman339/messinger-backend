@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { ConversationType, ConversationRole, ConversationEventType } from '@appTypes';
 import { ForbiddenException, NotFoundException } from '@exceptions';
 import { groupEvents } from '@events';
+import { Conversation } from '@entities';
+import { messageService } from '@services';
 
 import {
   CreateGroupDto,
@@ -120,7 +122,14 @@ class ConversationService {
 
       await ConversationMemberRepository.bulkCreate(conversationMembers, manager);
 
-      return savedConversation;
+      return manager.getRepository(Conversation).findOne({
+        where: { id: savedConversation.id },
+        relations: {
+          members: {
+            user: true,
+          },
+        },
+      });
     });
   }
 
@@ -522,6 +531,44 @@ class ConversationService {
         await ConversationRepository.deleteConversation(conversationId, manager);
       }
     });
+  }
+
+  async getConversationBootstrap(userId: string) {
+    const conversations = await ConversationRepository.getConversationList(userId);
+
+    const conversationsWithMessages = await Promise.all(
+      conversations.map(async (conversation) => {
+        const { items, nextCursor } = await messageService.getConversationMessages(userId, {
+          conversationId: conversation.id,
+          limit: 30,
+        });
+
+        return {
+          id: conversation.id,
+          type: conversation.type,
+          name: conversation.name,
+          messages: items,
+          messagesCursor: nextCursor,
+          createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
+          members: conversation.members
+            .filter((member) => member.userId !== userId)
+            .map((member) => ({
+              userId: member.userId,
+              role: member.role,
+              user: {
+                id: member.user.id,
+                username: member.user.username,
+                avatarUrl: member.user.avatarUrl,
+                status: member.user.status,
+                lastSeenAt: member.user.lastSeenAt,
+              },
+            })),
+        };
+      })
+    );
+
+    return conversationsWithMessages;
   }
 }
 

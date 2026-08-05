@@ -36,13 +36,14 @@ export async function presenceOfflineHandler(connection: Connection) {
     return;
   }
 
-  await userService.updateLastSeenAt(userId);
+  const lastSeenAt = await userService.updateLastSeenAt(userId);
 
   for (const receiverConnection of connectionManager.getAllConnections()) {
     sendMessage(receiverConnection, {
       type: WS_SERVER_EVENTS.PRESENCE_OFFLINE,
       data: {
         userId,
+        lastSeenAt,
       },
     });
   }

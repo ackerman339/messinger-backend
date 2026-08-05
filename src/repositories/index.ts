@@ -6,3 +6,5 @@ export * from './message.repository';
 export * from './message-delivery.repository';
 export * from './conversation-event.repository';
 export * from './group-invitation.repository';
+export * from './pending-upload.repository';
+export * from './message-attachment.repository';

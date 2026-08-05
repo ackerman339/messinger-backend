@@ -13,7 +13,15 @@ function getErrorInfo(error: unknown) {
     };
   }
 
-  return 'UNHANDLED_WS_ERROR';
+  // Keep the same shape as BaseException.toJSON() for unhandled errors,
+  // so the client can always rely on `data.error.code` existing.
+  return {
+    success: false,
+    error: {
+      message: 'An unexpected error occurred.',
+      code: 'UNHANDLED_WS_ERROR',
+    },
+  };
 }
 
 /**

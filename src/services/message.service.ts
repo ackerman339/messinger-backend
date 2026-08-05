@@ -3,7 +3,7 @@ import { env } from '@config/environment';
 import { AppDataSource } from '@config/database';
 import { MessageStatus, ConversationType } from '@appTypes';
 import { NotFoundException, ForbiddenException } from '@exceptions';
-import { conversationService } from '@services';
+import { conversationService, storageService } from '@services';
 import {
   PrivateMessageDto,
   GroupMessageDto,
@@ -16,6 +16,7 @@ import {
   MessageDeliveryRepository,
   MessageRepository,
   ConversationEventRepository,
+  MessageAttachmentRepository,
 } from '@repositories';
 
 class MessageService {
@@ -51,13 +52,20 @@ class MessageService {
     return decrypted.toString('utf8');
   }
 
-  async createPrivateMessage(senderId: string, { receiverId, content }: PrivateMessageDto) {
+  async createPrivateMessage(
+    senderId: string,
+    { receiverId, content, attachments }: PrivateMessageDto
+  ) {
     const { cipheredContent, iv, authTag } = this.cipherMessage(content);
     const conversation = await conversationService.getOrCreatePrivateConversation({
       type: ConversationType.PRIVATE,
       creatorId: senderId,
       members: [receiverId],
     });
+
+    if (!conversation) {
+      throw new NotFoundException('CONVERSATION_NOT_FOUND');
+    }
 
     const [sender, receiver, members] = await Promise.all([
       ConversationMemberRepository.findMember(conversation.id, senderId),
@@ -87,7 +95,7 @@ class MessageService {
       });
 
       const savedMessage = await MessageRepository.saveMessage(newMessage, manager);
-      const { id, conversationId, createdAt } = savedMessage;
+      const { id, createdAt } = savedMessage;
 
       const deliveries = members
         .filter((member) => member.userId !== senderId)
@@ -97,11 +105,19 @@ class MessageService {
           status: MessageStatus.SENT,
         }));
 
-      await MessageDeliveryRepository.createDeliveries(deliveries, manager);
-      await ConversationRepository.updateLastMessage(conversation.id, savedMessage.id, manager);
+      await Promise.all([
+        MessageDeliveryRepository.createDeliveries(deliveries, manager),
 
-      await Promise.all(
-        members
+        ConversationRepository.updateLastMessage(conversation.id, savedMessage.id, manager),
+
+        storageService.processMessageAttachments({
+          userId: senderId,
+          messageId: id,
+          attachments,
+          manager,
+        }),
+
+        ...members
           .filter((member) => member.userId !== senderId)
           .map((member) =>
             ConversationMemberRepository.incrementUnreadCount(
@@ -109,10 +125,12 @@ class MessageService {
               member.userId,
               manager
             )
-          )
-      );
+          ),
+      ]);
 
-      return { id, senderId, conversationId, createdAt, content };
+      const savedAttachments = await MessageAttachmentRepository.findByMessageId(id, manager);
+
+      return { id, senderId, conversation, createdAt, content, savedAttachments };
     });
 
     return {
@@ -121,7 +139,10 @@ class MessageService {
     };
   }
 
-  async createGroupMessage(senderId: string, { conversationId, content }: GroupMessageDto) {
+  async createGroupMessage(
+    senderId: string,
+    { conversationId, content, attachments }: GroupMessageDto
+  ) {
     const [conversation, member, members] = await Promise.all([
       ConversationRepository.findById(conversationId),
       ConversationMemberRepository.findMember(conversationId, senderId),
@@ -166,11 +187,19 @@ class MessageService {
           status: MessageStatus.SENT,
         }));
 
-      await MessageDeliveryRepository.createDeliveries(deliveries, manager);
-      await ConversationRepository.updateLastMessage(conversation.id, savedMessage.id, manager);
+      await Promise.all([
+        MessageDeliveryRepository.createDeliveries(deliveries, manager),
 
-      await Promise.all(
-        members
+        ConversationRepository.updateLastMessage(conversation.id, savedMessage.id, manager),
+
+        storageService.processMessageAttachments({
+          userId: senderId,
+          messageId: id,
+          attachments,
+          manager,
+        }),
+
+        ...members
           .filter((member) => member.userId !== senderId)
           .map((member) =>
             ConversationMemberRepository.incrementUnreadCount(
@@ -178,11 +207,13 @@ class MessageService {
               member.userId,
               manager
             )
-          )
-      );
+          ),
+      ]);
+
+      const savedAttachments = await MessageAttachmentRepository.findByMessageId(id, manager);
 
       return {
-        savedMessage: { id, createdAt, senderId, conversationId, content },
+        savedMessage: { id, createdAt, senderId, conversationId, content, savedAttachments },
         members,
       };
     });
@@ -221,7 +252,7 @@ class MessageService {
 
     const page = history.slice(0, limit + 1);
     const hasMore = page.length > limit;
-    const items = page.slice(0, limit);
+    const items = page.slice(0, limit + 1);
     const firstItem = items.at(0);
     const nextCursor = hasMore ? firstItem?.id : null;
 
