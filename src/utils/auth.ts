@@ -25,8 +25,21 @@ export function setAuthCookies(res: Response, accessToken: string, refreshToken:
 }
 
 export function clearAuthCookies(res: Response) {
-  res.clearCookie('accessToken');
-  res.clearCookie('refreshToken');
+  res.clearCookie('accessToken', {
+    httpOnly: env.COOKIE_HTTP_ONLY,
+    secure: env.COOKIE_SECURE,
+    sameSite: env.COOKIE_SAME_SITE,
+    domain: env.COOKIE_DOMAIN,
+    maxAge: env.REFRESH_COOKIE_MAX_AGE,
+  });
+
+  res.clearCookie('refreshToken', {
+    httpOnly: env.COOKIE_HTTP_ONLY,
+    secure: env.COOKIE_SECURE,
+    sameSite: env.COOKIE_SAME_SITE,
+    domain: env.COOKIE_DOMAIN,
+    maxAge: env.REFRESH_COOKIE_MAX_AGE,
+  });
 }
 
 export function getClientInfo(req: Request) {
