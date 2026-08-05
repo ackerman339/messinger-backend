@@ -30,7 +30,6 @@ export function clearAuthCookies(res: Response) {
     secure: env.COOKIE_SECURE,
     sameSite: env.COOKIE_SAME_SITE,
     domain: env.COOKIE_DOMAIN,
-    maxAge: env.REFRESH_COOKIE_MAX_AGE,
     path: '/',
   });
 
@@ -39,7 +38,6 @@ export function clearAuthCookies(res: Response) {
     secure: env.COOKIE_SECURE,
     sameSite: env.COOKIE_SAME_SITE,
     domain: env.COOKIE_DOMAIN,
-    maxAge: env.REFRESH_COOKIE_MAX_AGE,
     path: '/',
   });
 }
