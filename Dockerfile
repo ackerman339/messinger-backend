@@ -33,8 +33,6 @@ FROM node:24-alpine AS staging
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
-
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=build /app/node_modules ./node_modules
@@ -42,4 +40,4 @@ COPY --from=build /app/dist ./dist
 
 EXPOSE 3000
 
-CMD ["pnpm", "start"]
+CMD ["node", "dist/index.js"]
