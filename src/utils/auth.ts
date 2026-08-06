@@ -29,7 +29,7 @@ export function clearAuthCookies(res: Response) {
     httpOnly: env.COOKIE_HTTP_ONLY,
     secure: env.COOKIE_SECURE,
     domain: env.COOKIE_DOMAIN,
-    sameSite: 'none',
+    sameSite: env.COOKIE_SAME_SITE,
     path: '/',
   });
 
@@ -37,7 +37,7 @@ export function clearAuthCookies(res: Response) {
     httpOnly: env.COOKIE_HTTP_ONLY,
     secure: env.COOKIE_SECURE,
     domain: env.COOKIE_DOMAIN,
-    sameSite: 'none',
+    sameSite: env.COOKIE_SAME_SITE,
     path: '/',
   });
 }
