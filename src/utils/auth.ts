@@ -28,16 +28,16 @@ export function clearAuthCookies(res: Response) {
   res.clearCookie('accessToken', {
     httpOnly: env.COOKIE_HTTP_ONLY,
     secure: env.COOKIE_SECURE,
-    sameSite: env.COOKIE_SAME_SITE,
     domain: env.COOKIE_DOMAIN,
+    sameSite: 'none',
     path: '/',
   });
 
   res.clearCookie('refreshToken', {
     httpOnly: env.COOKIE_HTTP_ONLY,
     secure: env.COOKIE_SECURE,
-    sameSite: env.COOKIE_SAME_SITE,
     domain: env.COOKIE_DOMAIN,
+    sameSite: 'none',
     path: '/',
   });
 }
