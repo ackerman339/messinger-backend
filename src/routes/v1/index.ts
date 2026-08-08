@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { validateDTO, authenticate } from '@middlewares';
+import { UserRole } from '@appTypes';
+import { validateDTO, authenticate, authorize } from '@middlewares';
 
 import {
   signUpSchema,
@@ -13,6 +14,9 @@ import {
   UploadSchema,
   DownloadSchema,
   GetUserByCodeSchema,
+  AdminSchema,
+  UserSchema,
+  ListUserMessagesSchema,
 } from '@dtos';
 
 import {
@@ -31,6 +35,15 @@ import {
   processUpload,
   downloadAttachment,
   getUserByCode,
+  createAdmin,
+  adminSignIn,
+  restoreUserLoginKey,
+  deleteUser,
+  deleteAmin,
+  listUsers,
+  listUserConversations,
+  listConversationMessages,
+  listAdmins,
 } from '@controllers';
 
 const router = Router();
@@ -45,18 +58,45 @@ router.post('/refresh', authenticate, (_req, res) => {
 });
 
 // Files uploads
-router.post('/upload', authenticate, validateDTO(UploadSchema), processUpload);
-router.get('/download', authenticate, validateDTO(DownloadSchema), downloadAttachment);
+router.post(
+  '/upload',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(UploadSchema),
+  processUpload
+);
+
+router.get(
+  '/download',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(DownloadSchema),
+  downloadAttachment
+);
 
 // User endpoints
-router.get('/user-code', authenticate, validateDTO(GetUserByCodeSchema), getUserByCode);
+router.get(
+  '/user-code',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(GetUserByCodeSchema),
+  getUserByCode
+);
 
 // Conversation endpoints
-router.get('/conversation-list', authenticate, getConversationsBootstrap);
-router.post('/conversation/leave-group', authenticate, validateDTO(LeaveGroupSchema), leaveGroup);
+router.get('/conversation-list', authorize(UserRole.USER), authenticate, getConversationsBootstrap);
+
+router.post(
+  '/conversation/leave-group',
+  authorize(UserRole.USER),
+  authenticate,
+  validateDTO(LeaveGroupSchema),
+  leaveGroup
+);
 router.get(
   '/conversation/messages',
   authenticate,
+  authorize(UserRole.USER),
   validateDTO(GetConversationMessagesSchema),
   getConversationMessages
 );
@@ -64,6 +104,7 @@ router.get(
 router.post(
   '/conversation/create-group',
   authenticate,
+  authorize(UserRole.USER),
   validateDTO(CreateGroupSchema),
   createGroup
 );
@@ -71,6 +112,7 @@ router.post(
 router.post(
   '/conversation/transfer-ownership',
   authenticate,
+  authorize(UserRole.USER),
   validateDTO(TransferOwnershipSchema),
   transferGroupOwnership
 );
@@ -78,6 +120,7 @@ router.post(
 router.post(
   '/conversation/remove-group-member',
   authenticate,
+  authorize(UserRole.USER),
   validateDTO(RemoveMemberSchema),
   removeGroupMember
 );
@@ -85,6 +128,7 @@ router.post(
 router.delete(
   '/conversation/delete-group',
   authenticate,
+  authorize(UserRole.USER),
   validateDTO(DeleteConversationSchema),
   deleteGroup
 );
@@ -92,8 +136,74 @@ router.delete(
 router.delete(
   '/conversation/delete-private',
   authenticate,
+  authorize(UserRole.USER),
   validateDTO(DeleteConversationSchema),
   deletePrivateConversation
+);
+
+// Admin and super admin endpoints
+router.post('/admin/sign-in', validateDTO(AdminSchema), adminSignIn);
+
+router.post(
+  '/admin/create-admin',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(AdminSchema),
+  createAdmin
+);
+
+router.patch(
+  '/admin/restore-login-key',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(UserSchema),
+  restoreUserLoginKey
+);
+
+router.delete(
+  '/admin/delete-user',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(UserSchema),
+  deleteUser
+);
+
+router.delete(
+  '/admin/delete-admin',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(UserSchema),
+  deleteAmin
+);
+
+router.get(
+  '/admin/list-admins',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  listAdmins
+);
+
+router.get(
+  '/admin/list-users',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  listUsers
+);
+
+router.get(
+  '/admin/list-user-conversations',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(UserSchema),
+  listUserConversations
+);
+
+router.get(
+  '/admin/list-conversation-messages',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(ListUserMessagesSchema),
+  listConversationMessages
 );
 
 export default router;
