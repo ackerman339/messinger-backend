@@ -4,3 +4,4 @@ export * from './message.service';
 export * from './conversation.service';
 export * from './offline-sync.service';
 export * from './storage.service';
+export * from './admin.service';
