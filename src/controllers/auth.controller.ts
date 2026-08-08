@@ -3,17 +3,10 @@ import { authService, userService } from '@services';
 import { SignUpDto, SignInDto } from '@dtos';
 import { getClientInfo, setAuthCookies, clearAuthCookies } from '@utils';
 
-export async function signup(req: Request, res: Response) {
+export async function signup(_req: Request, res: Response) {
   const dto = res.locals.validatedDto as SignUpDto;
-  const { userAgent, ipAddress } = getClientInfo(req);
-  const { user, loginKey, accessToken, refreshToken } = await authService.signup(
-    dto,
-    userAgent,
-    ipAddress
-  );
+  const { user, loginKey } = await authService.signup(dto);
   const { username, status } = user;
-
-  setAuthCookies(res, accessToken, refreshToken);
 
   res.status(201).json({
     message: 'User created successfully',
@@ -59,6 +52,7 @@ export async function getMe(_req: Request, res: Response) {
     },
   });
 }
+
 export async function logout(req: Request, res: Response) {
   const refreshToken: string | undefined = req.cookies?.refreshToken;
 
