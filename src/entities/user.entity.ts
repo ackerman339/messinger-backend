@@ -61,6 +61,20 @@ export class User {
   })
   status: UserStatus;
 
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  adminName: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  passwordHash: string | null;
+
   @Index('idx_last_seen_at')
   @Column({
     type: 'timestamptz',

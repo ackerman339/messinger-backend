@@ -106,6 +106,16 @@ const envSchema = z.object({
   R2_ACCESS_KEY_ID: z.string().min(1),
   R2_SECRET_ACCESS_KEY: z.string().min(1),
   R2_BUCKET_NAME: z.string().min(1),
+
+  // Admin Seed
+  ADMIN_NAME: z.string().min(2).max(100),
+  ADMIN_PASSWORD: z
+    .string()
+    .min(8)
+    .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Must contain at least one number')
+    .regex(/[!@#$%^&*]/, 'Must contain at least one special character'),
 });
 
 export type Env = z.infer<typeof envSchema>;
