@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { AdminDto, UserDto, ListUserMessagesDto } from '@dtos';
+import { AdminDto, UserDto, ListUserMessagesDto, ListUsersDto, ListConversationsDto } from '@dtos';
 import { authService, adminService } from '@services';
 import { getClientInfo, setAuthCookies } from '@utils';
 
@@ -61,47 +61,41 @@ export async function deleteAmin(_req: Request, res: Response) {
 }
 
 export async function listUsers(_req: Request, res: Response) {
-  const users = await adminService.listUsers();
+  const dto = res.locals.validatedDto as ListUsersDto;
+  const result = await adminService.listUsers(dto);
 
   res.status(201).json({
     message: 'Users list',
-    result: {
-      users,
-    },
+    result,
   });
 }
 
 export async function listAdmins(_req: Request, res: Response) {
-  const admins = await adminService.listAdmins();
+  const dto = res.locals.validatedDto as ListUsersDto;
+  const result = await adminService.listAdmins(dto);
 
   res.status(201).json({
     message: 'Admins list',
-    result: {
-      admins,
-    },
+    result,
   });
 }
 
 export async function listUserConversations(_req: Request, res: Response) {
-  const dto = res.locals.validatedDto as UserDto;
-  const conversations = await adminService.listUserConversations(dto);
+  const dto = res.locals.validatedDto as ListConversationsDto;
+  const result = await adminService.listUserConversations(dto);
 
   res.status(201).json({
     message: 'User conversations',
-    result: {
-      conversations,
-    },
+    result,
   });
 }
 
 export async function listConversationMessages(_req: Request, res: Response) {
   const dto = res.locals.validatedDto as ListUserMessagesDto;
-  const messages = await adminService.listConversationMessages(dto);
+  const result = await adminService.listConversationMessages(dto);
 
   res.status(201).json({
     message: 'Conversation messages',
-    result: {
-      messages,
-    },
+    result,
   });
 }

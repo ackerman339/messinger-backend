@@ -1,5 +1,6 @@
 import { EntityManager } from 'typeorm';
 import { AppDataSource } from '@config/database';
+import { ListConversationsDto } from '@dtos';
 import { Conversation } from '@entities';
 
 export const ConversationRepository = AppDataSource.getRepository(Conversation).extend({
@@ -54,8 +55,20 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
     );
   },
 
-  async getConversationList(userId: string) {
-    return this.createQueryBuilder('conversation')
+  async getConversationList(userId: string, dto: Pick<ListConversationsDto, 'cursor' | 'limit'>) {
+    let cursorConversation;
+    const { cursor, limit } = dto;
+
+    if (cursor) {
+      cursorConversation = await this.findOne({
+        where: {
+          id: cursor,
+        },
+      });
+    }
+
+    const idsQuery = this.createQueryBuilder('conversation')
+      .select(['conversation.id', 'conversation.updatedAt'])
       .innerJoin(
         'conversation.members',
         'currentMember',
@@ -65,10 +78,51 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
       `,
         { userId }
       )
-      .leftJoinAndSelect('conversation.lastMessage', 'lastMessage')
-      .leftJoinAndSelect('conversation.members', 'members')
-      .leftJoinAndSelect('members.user', 'user')
       .orderBy('conversation.updatedAt', 'DESC', 'NULLS LAST')
+      .addOrderBy('conversation.id', 'DESC')
+      .take(limit + 1);
+
+    if (cursorConversation) {
+      if (cursorConversation.updatedAt === null) {
+        idsQuery.andWhere('conversation.updatedAt IS NULL').andWhere('conversation.id < :id', {
+          id: cursorConversation.id,
+        });
+      } else {
+        idsQuery.andWhere(
+          `(
+          conversation.updatedAt < :cursorUpdatedAt
+          OR (conversation.updatedAt = :cursorUpdatedAt AND conversation.id < :cursorId)
+          OR conversation.updatedAt IS NULL
+        )`,
+          { cursorUpdatedAt: cursorConversation.updatedAt, cursorId: cursorConversation.id }
+        );
+      }
+    }
+
+    const conversationIds = await idsQuery.getMany();
+
+    if (conversationIds.length === 0) {
+      return [];
+    }
+
+    const conversations = await this.createQueryBuilder('conversation')
+      .select([
+        'conversation.id',
+        'conversation.name',
+        'conversation.type',
+        'conversation.createdAt',
+        'conversation.updatedAt',
+      ])
+      .leftJoin('conversation.members', 'members')
+      .addSelect(['members.conversationId'])
+      .leftJoin('members.user', 'user')
+      .addSelect(['user.id', 'user.username'])
+      .whereInIds(conversationIds)
       .getMany();
+
+    const rowsById = new Map(conversations.map((row) => [row.id, row]));
+    const orderedRows = conversationIds.map((conversation) => rowsById.get(conversation.id)!);
+
+    return orderedRows;
   },
 });

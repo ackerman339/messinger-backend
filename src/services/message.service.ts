@@ -250,14 +250,13 @@ class MessageService {
 
     history.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
-    const page = history.slice(0, limit + 1);
-    const hasMore = page.length > limit;
-    const items = page.slice(0, limit + 1);
-    const firstItem = items.at(0);
+    const hasMore = history.length > limit;
+    const page = history.slice(0, limit);
+    const firstItem = page.at(0);
     const nextCursor = hasMore ? firstItem?.id : null;
 
     return {
-      items,
+      page,
       nextCursor,
     };
   }

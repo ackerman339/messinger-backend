@@ -37,6 +37,7 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
     const where: FindOptionsWhere<Message> = {
       conversationId,
     };
+
     if (cursor) {
       cursorMessage = await this.findOne({
         where: {

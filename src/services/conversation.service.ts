@@ -13,6 +13,7 @@ import {
   TransferOwnershipDto,
   RemoveMemberDto,
   DeleteConversationDto,
+  ListConversationsDto,
 } from '@dtos';
 
 import {
@@ -133,44 +134,6 @@ class ConversationService {
     });
   }
 
-  async getConversationsList(userId: string) {
-    const conversations = await ConversationRepository.getConversationList(userId);
-
-    return conversations.map((conversation) => {
-      const currentMember = conversation.members.find((member) => member.userId === userId)!;
-
-      const lastMessage = conversation.lastMessage
-        ? {
-            id: conversation.lastMessage.id,
-            senderId: conversation.lastMessage.senderId,
-            createdAt: conversation.lastMessage.createdAt,
-          }
-        : null;
-
-      if (conversation.type === ConversationType.PRIVATE) {
-        const participant = conversation.members.find((member) => member.userId !== userId)!;
-
-        return {
-          id: conversation.id,
-          type: conversation.type,
-          name: participant.user.username,
-          avatarUrl: participant.user.avatarUrl,
-          unreadCount: currentMember.unreadCount,
-          lastMessage,
-        };
-      }
-
-      return {
-        id: conversation.id,
-        type: conversation.type,
-        name: conversation.name!,
-        avatarUrl: null,
-        memberCount: conversation.members.filter((member) => member.softDeletedAt === null).length,
-        unreadCount: currentMember.unreadCount,
-        lastMessage,
-      };
-    });
-  }
   async createGroup(ownerId: string, { name }: CreateGroupDto) {
     return AppDataSource.transaction(async (manager) => {
       const conversation = ConversationRepository.create({
@@ -533,12 +496,15 @@ class ConversationService {
     });
   }
 
-  async getConversationBootstrap(userId: string) {
-    const conversations = await ConversationRepository.getConversationList(userId);
+  async getConversationBootstrap(
+    userId: string,
+    dto: Pick<ListConversationsDto, 'cursor' | 'limit'>
+  ) {
+    const conversations = await ConversationRepository.getConversationList(userId, dto);
 
     const conversationsWithMessages = await Promise.all(
       conversations.map(async (conversation) => {
-        const { items, nextCursor } = await messageService.getConversationMessages(userId, {
+        const { page, nextCursor } = await messageService.getConversationMessages(userId, {
           conversationId: conversation.id,
           limit: 30,
         });
@@ -547,7 +513,7 @@ class ConversationService {
           id: conversation.id,
           type: conversation.type,
           name: conversation.name,
-          messages: items,
+          messages: page,
           messagesCursor: nextCursor,
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,

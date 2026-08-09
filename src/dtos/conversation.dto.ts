@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { env } from '@config/environment';
 
 export const CreateGroupSchema = z.object({
   name: z.string().min(1).max(100),
@@ -26,12 +27,18 @@ export const DeleteConversationSchema = z.object({
 export const GetConversationMessagesSchema = z.object({
   conversationId: z.uuid(),
   cursor: z.uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(30),
+  limit: z.coerce.number().int().min(1).max(env.MAX_PAGE_SIZE).default(env.DEFAULT_PAGE_SIZE),
 });
 
 export const TypingSchema = z.object({
   conversationId: z.uuid(),
   isTyping: z.boolean().default(false),
+});
+
+export const ListConversationsSchema = z.object({
+  userId: z.uuid().optional(),
+  cursor: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(env.MAX_PAGE_SIZE).default(env.DEFAULT_PAGE_SIZE),
 });
 
 export type CreateGroupDto = z.infer<typeof CreateGroupSchema>;
@@ -41,3 +48,4 @@ export type RemoveMemberDto = z.infer<typeof RemoveMemberSchema>;
 export type DeleteConversationDto = z.infer<typeof DeleteConversationSchema>;
 export type GetConversationMessagesDto = z.infer<typeof GetConversationMessagesSchema>;
 export type TypingDto = z.infer<typeof TypingSchema>;
+export type ListConversationsDto = z.infer<typeof ListConversationsSchema>;

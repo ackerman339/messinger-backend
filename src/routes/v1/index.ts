@@ -17,6 +17,8 @@ import {
   AdminSchema,
   UserSchema,
   ListUserMessagesSchema,
+  ListUsersSchema,
+  ListConversationsSchema,
 } from '@dtos';
 
 import {
@@ -69,7 +71,7 @@ router.post(
 router.get(
   '/download',
   authenticate,
-  authorize(UserRole.USER),
+  authorize(UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateDTO(DownloadSchema),
   downloadAttachment
 );
@@ -179,6 +181,7 @@ router.delete(
 router.get(
   '/admin/list-admins',
   authenticate,
+  validateDTO(ListUsersSchema),
   authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
   listAdmins
 );
@@ -187,6 +190,7 @@ router.get(
   '/admin/list-users',
   authenticate,
   authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(ListUsersSchema),
   listUsers
 );
 
@@ -194,7 +198,7 @@ router.get(
   '/admin/list-user-conversations',
   authenticate,
   authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
-  validateDTO(UserSchema),
+  validateDTO(ListConversationsSchema),
   listUserConversations
 );
 

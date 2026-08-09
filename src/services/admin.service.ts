@@ -1,16 +1,12 @@
 import bcrypt from 'bcrypt';
 import { env } from '@config/environment';
 import { UserRole } from '@appTypes';
-import { UserDto, ListUserMessagesDto } from '@dtos';
+import { UserDto, ListUserMessagesDto, ListUsersDto, ListConversationsDto } from '@dtos';
 import { LOGIN_KEY_LENGTH } from '@constants';
-import { generateRandomString, generateLoginKeyLookup } from '@utils';
-import { Conversation } from '@entities';
+import { User, Conversation } from '@entities';
+import { generateRandomString, generateLoginKeyLookup, paginate } from '@utils';
 import { messageService } from '@services';
-import {
-  UserRepository,
-  ConversationMemberRepository,
-  ConversationRepository,
-} from '@repositories';
+import { UserRepository, ConversationRepository } from '@repositories';
 
 class AdminService {
   private async hashLoginKey(key: string) {
@@ -36,35 +32,34 @@ class AdminService {
     await UserRepository.delete({ id: dto.userId, role: UserRole.ADMIN });
   }
 
-  async listUsers() {
-    return UserRepository.find({
-      where: { role: UserRole.USER },
-      select: { username: true, id: true, createdAt: true, lastSeenAt: true },
-      order: { createdAt: 'DESC' },
-    });
+  async listUsers({ cursor, limit }: ListUsersDto) {
+    const users = await UserRepository.getAllUsers(UserRole.USER, { cursor, limit });
+    const { page, nextCursor } = paginate<User>({ items: users, limit });
+
+    return {
+      page,
+      nextCursor,
+    };
   }
 
-  async listAdmins() {
-    return UserRepository.find({
-      where: { role: UserRole.ADMIN },
-      select: { adminName: true, id: true, createdAt: true },
-      order: { createdAt: 'DESC' },
-    });
+  async listAdmins({ cursor, limit }: ListUsersDto) {
+    const users = await UserRepository.getAllUsers(UserRole.ADMIN, { cursor, limit });
+    const { page, nextCursor } = paginate<User>({ items: users, limit });
+
+    return {
+      page,
+      nextCursor,
+    };
   }
 
-  async listUserConversations(dto: UserDto) {
-    const conversationsPromises: Promise<Conversation | null>[] = [];
-    const conversationsMember = await ConversationMemberRepository.find({
-      where: { userId: dto.userId },
+  async listUserConversations({ userId, cursor, limit }: ListConversationsDto) {
+    const conversations = await ConversationRepository.getConversationList(userId!, {
+      cursor,
+      limit,
     });
+    const { page, nextCursor } = paginate<Conversation>({ items: conversations, limit });
 
-    for (const conversation of conversationsMember) {
-      conversationsPromises.push(
-        ConversationRepository.findOne({ where: { id: conversation.conversationId } })
-      );
-    }
-
-    return Promise.all(conversationsPromises);
+    return { page, nextCursor };
   }
 
   async listConversationMessages(dto: ListUserMessagesDto) {

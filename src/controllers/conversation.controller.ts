@@ -7,11 +7,14 @@ import {
   RemoveMemberDto,
   DeleteConversationDto,
   GetConversationMessagesDto,
+  ListConversationsDto,
 } from '@dtos';
 
 export async function getConversationsBootstrap(_req: Request, res: Response) {
+  const dto = res.locals.validatedDto as ListConversationsDto;
   const userId = res.locals.userId!;
-  const conversations = await conversationService.getConversationBootstrap(userId);
+
+  const conversations = await conversationService.getConversationBootstrap(userId, dto);
 
   res.status(200).json({
     message: 'Conversations loaded',
@@ -22,12 +25,12 @@ export async function getConversationsBootstrap(_req: Request, res: Response) {
 export async function getConversationMessages(_req: Request, res: Response) {
   const dto = res.locals.validatedDto as GetConversationMessagesDto;
   const userId = res.locals.userId!;
-  const { items, nextCursor } = await messageService.getConversationMessages(userId, dto);
+  const { page, nextCursor } = await messageService.getConversationMessages(userId, dto);
 
   res.status(200).json({
     message: 'Conversations loaded',
     result: {
-      items,
+      page,
       nextCursor,
     },
   });
