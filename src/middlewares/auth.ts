@@ -36,11 +36,8 @@ async function revokeAllSessions(userId: string) {
 }
 
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
-  // Both FE's client and admin dashboard sends different cookies
-  const accessToken: string | undefined =
-    req.cookies?.admin_access_token || req.cookies?.user_access_token;
-  const refreshToken: string | undefined =
-    req.cookies?.admin_refresh_token || req.cookies?.user_refresh_token;
+  const accessToken: string | undefined = req.cookies?.accessToken;
+  const refreshToken: string | undefined = req.cookies?.refreshToken;
 
   if (accessToken) {
     try {
@@ -97,7 +94,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // All good → rotate tokens
     const result = await rotateRefreshToken(req, roles, session);
 
-    setAuthCookies({ res, accessToken: result.accessToken, refreshToken: result.refreshToken });
+    setAuthCookies(res, result.accessToken, result.refreshToken);
 
     res.locals.userId = userId;
     res.locals.roles = roles;
