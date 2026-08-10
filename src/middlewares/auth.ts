@@ -18,7 +18,7 @@ async function rotateRefreshToken(req: Request, roles: UserRole[], oldSession: S
   const { ipAddress, userAgent } = getClientInfo(req);
 
   return await SessionRepository.createSession({
-    user: oldSession.user,
+    userId: oldSession.userId,
     roles,
     userAgent,
     ipAddress,
@@ -60,7 +60,6 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   const session = await SessionRepository.findOne({
     where: { refreshTokenHash: hashToken(refreshToken!) },
-    relations: { user: true },
   });
 
   try {

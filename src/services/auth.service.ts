@@ -58,9 +58,9 @@ class AuthService {
     }
 
     const { accessToken, refreshToken } = await SessionRepository.createSession({
-      user,
       userAgent,
       ipAddress,
+      userId: user.id,
       roles: [user.role],
     });
 
@@ -83,7 +83,7 @@ class AuthService {
 
   async authenticateWsConnection(req: IncomingMessage) {
     const cookies = await parseWebSocketCookies(req);
-    const accessToken = cookies.user_access_token;
+    const accessToken = cookies.accessToken;
     let payload: jwt.JwtPayload;
 
     try {
@@ -136,9 +136,9 @@ class AuthService {
     }
 
     const { accessToken, refreshToken } = await SessionRepository.createSession({
-      user: admin,
       userAgent,
       ipAddress,
+      userId: admin.id,
       roles: [admin.role],
     });
 
