@@ -31,5 +31,5 @@ export const adminSeed = async (dataSource: typeof AppDataSource) => {
 
   await UserRepository.save(newUser);
 
-  logger.info(`Admin user seeded successfully — email: ${env.ADMIN_NAME}`);
+  logger.info(`Admin user seeded successfully — username: ${env.ADMIN_NAME}`);
 };
