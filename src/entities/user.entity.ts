@@ -40,6 +40,7 @@ export class User {
     length: 10,
     unique: true,
   })
+  @Index('idx_user_code')
   userCode: string;
 
   @Column({

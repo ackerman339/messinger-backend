@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 import { GroupInvitationStatus } from '@appTypes';
@@ -13,6 +14,7 @@ import { User } from './user.entity';
 import { Conversation } from './conversation.entity';
 
 @Entity('group_invitations')
+@Index('idx_group_invitations_conversation_id_user_id', ['conversationId', 'targetId'])
 export class GroupInvitation {
   @PrimaryGeneratedColumn('uuid')
   id: string;

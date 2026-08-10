@@ -7,6 +7,7 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 
 import { ConversationType } from '@appTypes';
@@ -72,5 +73,6 @@ export class Conversation {
   createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamptz' })
+  @Index('idx_conversation_updated_at')
   updatedAt: Date;
 }

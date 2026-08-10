@@ -15,7 +15,7 @@ export class MessageAttachment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index()
+  @Index('idx_message_attachments_message_id')
   @Column({
     type: 'uuid',
   })

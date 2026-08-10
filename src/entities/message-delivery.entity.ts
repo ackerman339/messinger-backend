@@ -6,12 +6,14 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 import { MessageStatus } from '@appTypes';
 import { Message } from './message.entity';
 
 @Entity('message_deliveries')
+@Index('idx_message_deliveries_message_id_user_id', ['messageId', 'userId'])
 export class MessageDelivery {
   @PrimaryGeneratedColumn('uuid')
   id: string;

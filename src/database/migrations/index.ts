@@ -5,3 +5,4 @@ export * from './1785539774890-OfflineSyncMigration';
 export * from './1785548511040-ConversationsListMigration';
 export * from './1785801190513-FilesMigration';
 export * from './1786151449490-AdminMigration';
+export * from './1786402083868-IndexMigration';

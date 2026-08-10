@@ -1,9 +1,23 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
+
 import { ConversationRole } from '@appTypes';
 import { Conversation } from './conversation.entity';
 import { User } from './user.entity';
 
 @Entity('conversation_members')
+@Index('idx_conversation_members_conversation_id_user_id', ['conversationId', 'userId'])
+@Index('idx_conversation_members_conversation_id_soft_deleted_at', [
+  'conversationId',
+  'softDeletedAt',
+])
 export class ConversationMember {
   @PrimaryColumn({
     type: 'uuid',

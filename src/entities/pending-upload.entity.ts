@@ -5,7 +5,7 @@ export class PendingUpload {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index()
+  @Index('idx_pending_upload_user_id')
   @Column({
     type: 'uuid',
   })

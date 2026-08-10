@@ -5,6 +5,7 @@ import {
   Column,
   CreateDateColumn,
   JoinColumn,
+  Index,
 } from 'typeorm';
 
 import { SessionRevokeReason } from '@appTypes';
@@ -20,16 +21,18 @@ export class Session {
   user: User;
 
   @Column({ name: 'user_id', type: 'uuid' })
+  @Index('idx_user_sessions_user_id')
   userId: string;
 
   @Column({ type: 'text', unique: true })
+  @Index('idx_user_sessions_refresh_token_hash')
   refreshTokenHash: string;
 
   @Column({ type: 'inet', nullable: true })
   ipAddress: string | null;
 
-  @Column({ type: 'text' })
-  userAgent: string;
+  @Column({ type: 'text', nullable: true })
+  userAgent: string | null;
 
   @Column({ type: 'boolean', default: false })
   isRevoked: boolean;
