@@ -24,7 +24,7 @@ export async function signin(req: Request, res: Response) {
   const { user, accessToken, refreshToken } = await authService.signin(dto, userAgent, ipAddress);
   const { username, status, id, userCode, avatarUrl, role, createdAt, updatedAt } = user;
 
-  setAuthCookies(res, accessToken, refreshToken);
+  setAuthCookies({ res, accessToken, refreshToken });
 
   res.status(201).json({
     message: 'User logged successfully',

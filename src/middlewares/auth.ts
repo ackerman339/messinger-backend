@@ -94,7 +94,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // All good → rotate tokens
     const result = await rotateRefreshToken(req, roles, session);
 
-    setAuthCookies(res, result.accessToken, result.refreshToken);
+    setAuthCookies({ res, accessToken: result.accessToken, refreshToken: result.refreshToken });
 
     res.locals.userId = userId;
     res.locals.roles = roles;

@@ -22,7 +22,7 @@ export async function adminSignIn(req: Request, res: Response) {
     ipAddress
   );
 
-  setAuthCookies(res, accessToken, refreshToken);
+  setAuthCookies({ res, accessToken, refreshToken, isAdmin: true });
 
   res.status(201).json({
     message: 'User logged successfully',
