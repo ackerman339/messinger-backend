@@ -19,7 +19,7 @@ export const errorHandler = (
     requestId,
     ...(env.NODE_ENV === 'production'
       ? {}
-      : { body: req.body, query: req.query, params: req.params }),
+      : { body: req.body, query: req.query, params: req.params, trace: error.stack }),
   });
 
   if (error instanceof BaseException) {
