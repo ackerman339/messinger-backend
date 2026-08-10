@@ -26,7 +26,6 @@ export function clearAuthCookies(res: Response) {
   res.clearCookie('accessToken', {
     httpOnly: env.COOKIE_HTTP_ONLY,
     secure: env.COOKIE_SECURE,
-    domain: env.COOKIE_DOMAIN,
     sameSite: env.COOKIE_SAME_SITE,
     path: '/',
   });
@@ -34,7 +33,6 @@ export function clearAuthCookies(res: Response) {
   res.clearCookie('refreshToken', {
     httpOnly: env.COOKIE_HTTP_ONLY,
     secure: env.COOKIE_SECURE,
-    domain: env.COOKIE_DOMAIN,
     sameSite: env.COOKIE_SAME_SITE,
     path: '/',
   });
