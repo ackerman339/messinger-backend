@@ -1,6 +1,6 @@
-import { EntityManager, MoreThan, LessThan, Raw, FindOptionsWhere } from 'typeorm';
+import { EntityManager, MoreThan, LessThan, Raw, FindOptionsWhere, In } from 'typeorm';
 import { AppDataSource } from '@config/database';
-import { Message } from '@entities';
+import { Message, Conversation } from '@entities';
 
 type FindMessagesParams = {
   limit: number;
@@ -78,5 +78,29 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
       },
       take: limit + 1,
     });
+  },
+
+  async findMessagesToCleanup(cutoff: Date) {
+    return this.find({
+      where: { createdAt: LessThan(cutoff) },
+      relations: { attachments: true },
+      select: {
+        id: true,
+        attachments: { id: true, storageKey: true },
+      },
+    });
+  },
+
+  async nullifyLastMessageReferences(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
+    await this.manager
+      .getRepository(Conversation)
+      .update({ lastMessageId: In(ids) }, { lastMessageId: null });
+  },
+
+  async deleteMessagesOlderThan(cutoff: Date): Promise<number> {
+    const result = await this.delete({ createdAt: LessThan(cutoff) });
+    return result.affected ?? 0;
   },
 });

@@ -1,6 +1,12 @@
 import { EntityManager } from 'typeorm';
 import { addHours } from 'date-fns';
-import { PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import {
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectsCommand,
+} from '@aws-sdk/client-s3';
+
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2Client } from '@config/r2-client';
 import { env } from '@config/environment';
@@ -158,6 +164,26 @@ class StorageService {
     return getSignedUrl(r2Client, command, {
       expiresIn: 2 * 24 * 60 * 60, // 2 days
     });
+  }
+
+  async deleteFiles(storageKeys: string[]) {
+    const MAX_KEYS_PER_BATCH = 1000;
+
+    if (storageKeys.length === 0) return;
+
+    for (let i = 0; i < storageKeys.length; i += MAX_KEYS_PER_BATCH) {
+      const batch = storageKeys.slice(i, i + MAX_KEYS_PER_BATCH);
+
+      await r2Client.send(
+        new DeleteObjectsCommand({
+          Bucket: env.R2_BUCKET_NAME,
+          Delete: {
+            Objects: batch.map((key) => ({ Key: key })),
+            Quiet: false,
+          },
+        })
+      );
+    }
   }
 }
 
