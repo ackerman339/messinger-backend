@@ -1,15 +1,17 @@
+import { runtimeConfig } from '../utils/cli-config';
+
 type ExecFn = (command: string) => void;
 
 export function drop(exec: ExecFn): void {
-  exec(`pnpm typeorm  schema:drop -d src/database/data-source.ts`);
+  exec(`${runtimeConfig.typeormCmd} schema:drop -d ${runtimeConfig.dataSourcePath}`);
 }
 
 export function sync(exec: ExecFn): void {
-  exec(`pnpm typeorm  schema:sync -d src/database/data-source.ts`);
+  exec(`${runtimeConfig.typeormCmd} schema:sync -d ${runtimeConfig.dataSourcePath}`);
 }
 
 export function reset(exec: ExecFn): void {
-  exec(`pnpm typeorm  schema:drop -d src/database/data-source.ts`); // Drop schema
-  exec(`pnpm typeorm  schema:sync -d src/database/data-source.ts`); // Run migrations to recreate schema
-  exec(`pnpm seed`);
+  exec(`${runtimeConfig.typeormCmd} schema:drop -d ${runtimeConfig.dataSourcePath}`);
+  exec(`${runtimeConfig.typeormCmd} schema:sync -d ${runtimeConfig.dataSourcePath}`);
+  exec(runtimeConfig.seedCmd);
 }

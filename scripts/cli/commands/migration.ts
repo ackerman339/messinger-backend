@@ -1,23 +1,25 @@
+import { runtimeConfig, devOnlyConfig } from '../utils/cli-config';
+
 type ExecFn = (command: string) => void;
 
 export function run(exec: ExecFn) {
-  exec(`pnpm typeorm  migration:run -d src/database/data-source.ts`);
+  exec(`${runtimeConfig.typeormCmd} migration:run -d ${runtimeConfig.dataSourcePath}`);
 }
 
 export function revert(exec: ExecFn) {
-  exec(`pnpm typeorm  migration:revert -d src/database/data-source.ts`);
+  exec(`${runtimeConfig.typeormCmd} migration:revert -d ${runtimeConfig.dataSourcePath}`);
 }
 
 export function show(exec: ExecFn) {
-  exec(`pnpm typeorm  migration:show -d src/database/data-source.ts`);
+  exec(`${runtimeConfig.typeormCmd} migration:show -d ${runtimeConfig.dataSourcePath}`);
 }
 
 export function generate(exec: ExecFn, name: string) {
   exec(
-    `pnpm typeorm  migration:generate src/database/migrations/${name} -d src/database/data-source.ts`
+    `${devOnlyConfig.typeormCmd} migration:generate ${devOnlyConfig.migrationsDir}/${name} -d src/database/data-source.ts`
   );
 }
 
 export function create(exec: ExecFn, name: string) {
-  exec(`pnpm typeorm  migration:create src/database/migrations/${name}`);
+  exec(`${devOnlyConfig.typeormCmd} migration:create ${devOnlyConfig.migrationsDir}/${name}`);
 }
