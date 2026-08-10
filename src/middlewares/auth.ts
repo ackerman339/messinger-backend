@@ -36,8 +36,11 @@ async function revokeAllSessions(userId: string) {
 }
 
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
-  const accessToken: string | undefined = req.cookies?.accessToken;
-  const refreshToken: string | undefined = req.cookies?.refreshToken;
+  // Both FE's client and admin dashboard sends different cookies
+  const accessToken: string | undefined =
+    req.cookies?.admin_access_token || req.cookies?.user_access_token;
+  const refreshToken: string | undefined =
+    req.cookies?.admin_refresh_token || req.cookies?.user_refresh_token;
 
   if (accessToken) {
     try {

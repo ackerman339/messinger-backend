@@ -83,7 +83,7 @@ class AuthService {
 
   async authenticateWsConnection(req: IncomingMessage) {
     const cookies = await parseWebSocketCookies(req);
-    const accessToken = cookies.accessToken;
+    const accessToken = cookies.user_access_token;
     let payload: jwt.JwtPayload;
 
     try {
