@@ -86,7 +86,13 @@ router.get(
 );
 
 // Conversation endpoints
-router.get('/conversation-list', authorize(UserRole.USER), authenticate, getConversationsBootstrap);
+router.get(
+  '/conversation-list',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(ListConversationsSchema),
+  getConversationsBootstrap
+);
 
 router.post(
   '/conversation/leave-group',
