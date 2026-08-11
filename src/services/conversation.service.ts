@@ -506,7 +506,7 @@ class ConversationService {
       conversations.map(async (conversation) => {
         const { page, nextCursor } = await messageService.getConversationMessages(userId, {
           conversationId: conversation.id,
-          limit: 30,
+          limit: 20,
         });
 
         return {
@@ -518,17 +518,9 @@ class ConversationService {
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
           members: conversation.members
-            .filter((member) => member.userId !== userId)
+            .filter((member) => member.user.id !== userId)
             .map((member) => ({
-              userId: member.userId,
-              role: member.role,
-              user: {
-                id: member.user.id,
-                username: member.user.username,
-                avatarUrl: member.user.avatarUrl,
-                status: member.user.status,
-                lastSeenAt: member.user.lastSeenAt,
-              },
+              ...member.user,
             })),
         };
       })

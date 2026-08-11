@@ -18,7 +18,7 @@ export async function getConversationsBootstrap(_req: Request, res: Response) {
 
   res.status(200).json({
     message: 'Conversations loaded',
-    conversations,
+    result: conversations,
   });
 }
 

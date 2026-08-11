@@ -116,7 +116,7 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
       .leftJoin('conversation.members', 'members')
       .addSelect(['members.conversationId'])
       .leftJoin('members.user', 'user')
-      .addSelect(['user.id', 'user.username'])
+      .addSelect(['user.id', 'user.username', 'user.lastSeenAt'])
       .whereInIds(conversationIds)
       .getMany();
 
