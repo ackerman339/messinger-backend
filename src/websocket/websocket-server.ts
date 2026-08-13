@@ -1,5 +1,7 @@
 import { Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { WS_SERVER_EVENTS, WS_CLIENT_EVENTS } from '@constants';
+import { Connection, WsClientMessage } from '@appTypes';
 import { logger } from '@config/logger';
 import { authService, offlineSyncService } from '@services';
 import { connectionManager } from './managers/connection-manager';
@@ -17,6 +19,19 @@ interface HeartbeatWebSocket extends WebSocket {
 }
 
 const HEARTBEAT_INTERVAL = 30_000;
+const WAIT_FOR_AUTH_TIMEOUT = 10_000;
+
+async function authenticate(connection: Connection, userId: string, sessionId: string) {
+  connection.userId = userId;
+  connection.sessionId = sessionId;
+  connectionManager.attachUser(connection, userId);
+
+  presenceOnlineHandler(connection);
+  await offlineSyncService.syncPendingMessages(userId);
+  await offlineSyncService.syncPendingGroupInvitations(userId);
+
+  logger.info(`[WS] Authenticated connection (${connection.id}) user=${userId}`);
+}
 
 export function createWebSocketServer({ server }: CreateWebSocketServerOptions) {
   const { dispatch } = registerEventHandlers();
@@ -63,18 +78,34 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
       `[WS] Connection established (${connection.id}) - Active: ${connectionManager.count()}`
     );
 
+    let authenticated = false;
+    let authTimeout: NodeJS.Timeout | undefined;
+
     try {
-      const { userId, sessionId } = await authService.authenticateWsConnection(req);
-      connection.userId = userId;
-      connection.sessionId = sessionId;
-      connectionManager.attachUser(connection, userId);
+      const cookies = await authService.authenticateWsConnection(req);
+      // Authenticate via cookies, if not request auth via socket.send
+      if (cookies?.accessToken) {
+        const result = await authService.getWsSession(cookies.accessToken);
+        await authenticate(connection, result.userId, result.sessionId);
+        authenticated = true;
+      } else {
+        socket.send(
+          JSON.stringify({
+            type: WS_SERVER_EVENTS.REQUEST_AUTH_TOKEN,
+          })
+        );
 
-      presenceOnlineHandler(connection);
+        // Wait for a client response, if not close socket connection
+        authTimeout = setTimeout(() => {
+          if (authenticated) {
+            return;
+          }
 
-      await offlineSyncService.syncPendingMessages(userId);
-      await offlineSyncService.syncPendingGroupInvitations(userId);
+          logger.warn(`[WS] Authentication timeout (${connection.id})`);
 
-      logger.info(`[WS] Authenticated connection (${connection.id}) user=${userId}`);
+          socket.close(1008, 'Unauthorized');
+        }, WAIT_FOR_AUTH_TIMEOUT);
+      }
     } catch (error) {
       logger.error(error);
       sendError(connection, error);
@@ -91,7 +122,23 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
 
     socket.on('message', async (raw) => {
       try {
-        const message = parseWsMessage(raw);
+        const message = parseWsMessage(raw) as WsClientMessage<{ accessToken: string }>;
+
+        // If client responds with tokenm, then authenticate connection
+        if (message.type === WS_CLIENT_EVENTS.AUTH_TOKEN_SENT) {
+          const result = await authService.getWsSession(message.data.accessToken);
+          await authenticate(connection, result.userId, result.sessionId);
+          authenticated = true;
+
+          // Clear timeout once connection is authenticated
+          if (authTimeout) {
+            clearTimeout(authTimeout);
+            authTimeout = undefined;
+          }
+
+          return;
+        }
+
         await dispatch(connection, message);
       } catch (error) {
         logger.error(error);
@@ -100,6 +147,11 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
     });
 
     socket.on('close', (code, reason) => {
+      // Clear timeout once connection is closed
+      if (authTimeout) {
+        clearTimeout(authTimeout);
+      }
+
       const userId = connection.userId;
       const userConnections = userId ? connectionManager.getUserConnections(userId) : [];
       const wasLastConnection = Boolean(userId) && userConnections.length === 1;
