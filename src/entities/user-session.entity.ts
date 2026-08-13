@@ -47,6 +47,18 @@ export class Session {
   @Column({ type: 'timestamptz' })
   expiresAt: Date;
 
+  @Column({ type: 'text', nullable: true })
+  previousRefreshTokenHash: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  rotatedAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  rotatedAccessToken: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  rotatedRefreshToken: string | null;
+
   @CreateDateColumn({
     type: 'timestamptz',
   })

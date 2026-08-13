@@ -4,34 +4,15 @@ import { logger } from '@config/logger';
 import { env } from '@config/environment';
 import { SessionRevokeReason, UserRole } from '@appTypes';
 import { UnauthorizedException } from '@exceptions';
-import { Session } from '@entities';
 import { SessionRepository } from '@repositories';
 
 import {
   setAuthCookies,
-  getClientInfo,
   hashToken,
   clearAuthCookies,
   getAccessToken,
   getRefreshToken,
 } from '@utils';
-
-async function rotateRefreshToken(req: Request, roles: UserRole[], oldSession: Session) {
-  // Revoke prev session
-  await SessionRepository.update(oldSession.id, {
-    isRevoked: true,
-    revokedReason: SessionRevokeReason.TIMEOUT,
-  });
-
-  const { ipAddress, userAgent } = getClientInfo(req);
-
-  return await SessionRepository.createSession({
-    userId: oldSession.userId,
-    roles,
-    userAgent,
-    ipAddress,
-  });
-}
 
 async function revokeAllSessions(userId: string) {
   await SessionRepository.update(
@@ -68,21 +49,22 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     return next(new UnauthorizedException('INVALID_AUTHENTICATION'));
   }
 
+  const refreshTokenHash = hashToken(refreshToken);
   const session = await SessionRepository.findOne({
-    where: { refreshTokenHash: hashToken(refreshToken!) },
+    where: [{ refreshTokenHash }, { previousRefreshTokenHash: refreshTokenHash }],
   });
 
+  // 3. Session must exist
+  if (!session) {
+    clearAuthCookies(res);
+    return next(new UnauthorizedException('INVALID_SESSION'));
+  }
+
   try {
-    // 3. Verify refresh token
+    // 4. Verify refresh token
     const payload = jwt.verify(refreshToken!, env.JWT_REFRESH_SECRET) as jwt.JwtPayload;
     const userId = payload.sub as string;
     const roles = payload.roles as UserRole[];
-
-    // 4. Session must exist
-    if (!session) {
-      clearAuthCookies(res);
-      return next(new UnauthorizedException('INVALID_SESSION'));
-    }
 
     // 5. Reused/revoked refresh token
     if (session.isRevoked) {
@@ -102,7 +84,12 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     }
 
     // 7. All good → rotate tokens
-    const result = await rotateRefreshToken(req, roles, session);
+    const result = await SessionRepository.rotateSession(session.id, roles, refreshToken);
+
+    if (!result) {
+      return next(new UnauthorizedException('UNABLE_TO_ROTATE_SESSION'));
+    }
+
     const authorization = req.headers.authorization;
     const isBearerClient = typeof authorization === 'string' && /^Bearer\s+/i.test(authorization);
 
