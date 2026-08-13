@@ -13,6 +13,7 @@ export const loggingMiddleware = (req: Request, res: Response, next: NextFunctio
     logger.http('HTTP Request', {
       method: req.method,
       path: req.originalUrl,
+      headers: req.headers,
       statusCode: res.statusCode,
       requestId,
       userAgent,
