@@ -6,7 +6,15 @@ import { SessionRevokeReason, UserRole } from '@appTypes';
 import { UnauthorizedException } from '@exceptions';
 import { Session } from '@entities';
 import { SessionRepository } from '@repositories';
-import { setAuthCookies, getClientInfo, hashToken, clearAuthCookies } from '@utils';
+
+import {
+  setAuthCookies,
+  getClientInfo,
+  hashToken,
+  clearAuthCookies,
+  getAccessToken,
+  getRefreshToken,
+} from '@utils';
 
 async function rotateRefreshToken(req: Request, roles: UserRole[], oldSession: Session) {
   // Revoke prev session
@@ -36,9 +44,10 @@ async function revokeAllSessions(userId: string) {
 }
 
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
-  const accessToken: string | undefined = req.cookies?.accessToken;
-  const refreshToken: string | undefined = req.cookies?.refreshToken;
+  const accessToken = getAccessToken(req);
+  const refreshToken = getRefreshToken(req);
 
+  // 1. Try access token
   if (accessToken) {
     try {
       const payload = jwt.verify(accessToken, env.JWT_SECRET) as jwt.JwtPayload;
@@ -54,6 +63,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     }
   }
 
+  // 2. Access token expired → refresh token required
   if (!refreshToken) {
     return next(new UnauthorizedException('INVALID_AUTHENTICATION'));
   }
@@ -63,24 +73,25 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   });
 
   try {
-    // Verify refresh token signature
+    // 3. Verify refresh token
     const payload = jwt.verify(refreshToken!, env.JWT_REFRESH_SECRET) as jwt.JwtPayload;
     const userId = payload.sub as string;
     const roles = payload.roles as UserRole[];
 
-    // Not found in DB → invalid or forged token
+    // 4. Session must exist
     if (!session) {
       clearAuthCookies(res);
       return next(new UnauthorizedException('INVALID_SESSION'));
     }
 
+    // 5. Reused/revoked refresh token
     if (session.isRevoked) {
       await revokeAllSessions(userId);
       clearAuthCookies(res);
       return next(new UnauthorizedException('SUSPICIOUS_ACTIVITY_DETECTED'));
     }
 
-    // Legitimately expired
+    // 6. Legitimately expired
     if (session.expiresAt < new Date()) {
       await SessionRepository.update(session.id, {
         isRevoked: true,
@@ -90,16 +101,23 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       return next(new UnauthorizedException('EXPIRED_SESSION'));
     }
 
-    // All good → rotate tokens
+    // 7. All good → rotate tokens
     const result = await rotateRefreshToken(req, roles, session);
+    const authorization = req.headers.authorization;
+    const isBearerClient = typeof authorization === 'string' && /^Bearer\s+/i.test(authorization);
 
-    setAuthCookies(res, result.accessToken, result.refreshToken);
+    if (isBearerClient) {
+      res.setHeader('x-access-Token', result.accessToken);
+      res.setHeader('x-refresh-Token', result.refreshToken);
+    } else {
+      setAuthCookies(res, result.accessToken, result.refreshToken);
+    }
 
     res.locals.userId = userId;
     res.locals.roles = roles;
     return next();
   } catch (error) {
-    // Invalid refresh token signature
+    // 8. Invalid refresh token signature
     await SessionRepository.update(session!.id, {
       isRevoked: true,
       revokedReason:

@@ -47,3 +47,41 @@ export function getClientInfo(req: Request) {
       null,
   };
 }
+
+export function getAccessToken(req: Request): string | undefined {
+  // Via cookies
+  if (req.cookies?.accessToken) {
+    return req.cookies.accessToken;
+  }
+
+  // Via headers
+  const authorization = req.headers.authorization;
+
+  if (!authorization) {
+    return undefined;
+  }
+
+  const [scheme, token] = authorization.split(' ');
+
+  if (scheme?.toLowerCase() !== 'bearer' || !token) {
+    return undefined;
+  }
+
+  return token;
+}
+
+export function getRefreshToken(req: Request): string | undefined {
+  // Via cookies
+  if (req.cookies?.refreshToken) {
+    return req.cookies.refreshToken;
+  }
+
+  // Via headers
+  const refreshToken = req.headers['x-refresh-token'];
+
+  if (Array.isArray(refreshToken)) {
+    return refreshToken[0];
+  }
+
+  return refreshToken;
+}

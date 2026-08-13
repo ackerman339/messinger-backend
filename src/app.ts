@@ -17,7 +17,8 @@ app.use(
     origin: env.CORS_ORIGIN,
     credentials: env.CORS_CREDENTIALS,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Accept', 'authorization', 'x-refresh-token'],
+    exposedHeaders: ['x-access-token', 'x-refresh-token'],
   })
 );
 app.use(express.json());

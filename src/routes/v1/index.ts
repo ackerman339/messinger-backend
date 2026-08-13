@@ -25,6 +25,7 @@ import {
   signup,
   signin,
   logout,
+  mobileSignin,
   createGroup,
   leaveGroup,
   transferGroupOwnership,
@@ -52,6 +53,7 @@ const router = Router();
 
 // Authentication and authorization endpoints
 router.post('/sign-in', validateDTO(signInSchema), signin);
+router.post('/mobile/sign-in', validateDTO(signInSchema), mobileSignin);
 router.post('/sign-up', validateDTO(signUpSchema), signup);
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getMe);
