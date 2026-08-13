@@ -58,6 +58,9 @@ const envSchema = z.object({
   // CORS
   CORS_ORIGIN: commaSeparated,
   CORS_CREDENTIALS: booleanString,
+  CORS_METHODS: commaSeparated,
+  CORS_ALLOWED_HEADERS: commaSeparated,
+  CORS_EXPOSED_HEADERS: commaSeparated,
 
   // Hashing
   SALT_ROUNDS: z.coerce.number().int().positive(),
