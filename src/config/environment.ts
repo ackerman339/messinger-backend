@@ -110,6 +110,16 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1),
   R2_BUCKET_NAME: z.string().min(1),
 
+  // Webpush
+  VAPID_PUBLIC_KEY: z.string().min(1),
+  VAPID_PRIVATE_KEY: z.string().min(1),
+  VAPID_SUBJECT: z
+    .string()
+    .refine(
+      (value) => value.startsWith('mailto:') || value.startsWith('https://'),
+      'VAPID_SUBJECT must be a mailto: or https:// URI'
+    ),
+
   // Admin Seed
   ADMIN_NAME: z.string().min(2).max(100),
   ADMIN_PASSWORD: z
