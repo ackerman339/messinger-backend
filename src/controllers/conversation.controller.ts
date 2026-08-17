@@ -14,11 +14,11 @@ export async function getConversationsBootstrap(_req: Request, res: Response) {
   const dto = res.locals.validatedDto as ListConversationsDto;
   const userId = res.locals.userId!;
 
-  const conversations = await conversationService.getConversationBootstrap(userId, dto);
+  const result = await conversationService.getConversationBootstrap(userId, dto);
 
   res.status(200).json({
     message: 'Conversations loaded',
-    result: conversations,
+    result: result,
   });
 }
 

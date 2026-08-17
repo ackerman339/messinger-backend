@@ -6,6 +6,7 @@ import { ForbiddenException, NotFoundException } from '@exceptions';
 import { groupEvents } from '@events';
 import { Conversation } from '@entities';
 import { messageService } from '@services';
+import { paginate } from '@utils';
 
 import {
   CreateGroupDto,
@@ -501,9 +502,10 @@ class ConversationService {
     dto: Pick<ListConversationsDto, 'cursor' | 'limit'>
   ) {
     const conversations = await ConversationRepository.getConversationList(userId, dto);
+    const { page, nextCursor } = paginate<Conversation>({ items: conversations, limit: dto.limit });
 
     const conversationsWithMessages = await Promise.all(
-      conversations.map(async (conversation) => {
+      page.map(async (conversation) => {
         const { page, nextCursor } = await messageService.getConversationMessages(userId, {
           conversationId: conversation.id,
           limit: 20,
@@ -526,7 +528,7 @@ class ConversationService {
       })
     );
 
-    return conversationsWithMessages;
+    return { page: conversationsWithMessages, nextCursor };
   }
 }
 
