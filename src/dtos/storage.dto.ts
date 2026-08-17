@@ -17,6 +17,7 @@ const UPLOAD_CONTENT_TYPES = [
   'audio/ogg',
   'audio/mp4',
   'audio/mpeg',
+  'audio/webm; codecs=opus', // for safari
   'audio/webm;codecs=opus',
   'audio/ogg;codecs=opus',
   'audio/m4a',
