@@ -19,6 +19,7 @@ const UPLOAD_CONTENT_TYPES = [
   'audio/mpeg',
   'audio/webm;codecs=opus',
   'audio/ogg;codecs=opus',
+  'audio/m4a',
 
   // PDF
   'application/pdf',
