@@ -1,6 +1,6 @@
 import { WsHandlers } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
-import { messageService } from '@services';
+import { messageService, pushNotificationService } from '@services';
 import { PrivateMessageSchema, PrivateMessageDto } from '@dtos';
 import { requireAuthentication } from '../authenticate-guard';
 import { connectionManager } from '../managers/connection-manager';
@@ -25,15 +25,16 @@ export async function privateMessageHandler({
     attachments,
   });
 
-  //Deliver message to conversation members.
+  // Deliver message to conversation members.
   for (const member of members) {
-    //Do not send to sender connection.
+    // Do not send to sender connection.
     if (member.userId === senderId) {
       continue;
     }
 
     const connections = connectionManager.getUserConnections(member.userId);
 
+    // User is connected through WebSocket.
     for (const receiverConnection of connections) {
       sendMessage(receiverConnection, {
         type: WS_SERVER_EVENTS.NEW_MESSAGE,
@@ -44,6 +45,19 @@ export async function privateMessageHandler({
           conversation: savedMessage.conversation,
           createdAt: savedMessage.createdAt,
           attachments: savedMessage.savedAttachments,
+        },
+      });
+    }
+
+    // User is not connected through WebSocket.
+    if (connections.length === 0) {
+      void pushNotificationService.sendToUser(member.userId, {
+        title: savedMessage.senderName!,
+        body: content,
+        icon: '/pwa-192x192.png',
+        data: {
+          messageId: savedMessage.id,
+          conversationId: savedMessage.conversation.id,
         },
       });
     }

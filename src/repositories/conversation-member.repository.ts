@@ -30,6 +30,13 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
         conversationId,
         userId,
       },
+      relations: { user: true },
+      select: {
+        user: {
+          id: true,
+          username: true,
+        },
+      },
     });
   },
 

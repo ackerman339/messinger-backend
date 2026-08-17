@@ -130,7 +130,15 @@ class MessageService {
 
       const savedAttachments = await MessageAttachmentRepository.findByMessageId(id, manager);
 
-      return { id, senderId, conversation, createdAt, content, savedAttachments };
+      return {
+        id,
+        senderId,
+        conversation,
+        createdAt,
+        content,
+        savedAttachments,
+        senderName: sender?.user.username,
+      };
     });
 
     return {
