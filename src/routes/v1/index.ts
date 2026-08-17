@@ -19,6 +19,8 @@ import {
   ListUserMessagesSchema,
   ListUsersSchema,
   ListConversationsSchema,
+  WebPushSubscriptionSchema,
+  WebPushUnsubscriptionSchema,
 } from '@dtos';
 
 import {
@@ -47,6 +49,8 @@ import {
   listUserConversations,
   listConversationMessages,
   listAdmins,
+  subscribeWeb,
+  unsubscribeWeb,
 } from '@controllers';
 
 const router = Router();
@@ -216,6 +220,24 @@ router.get(
   authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
   validateDTO(ListUserMessagesSchema),
   listConversationMessages
+);
+
+// Push subscription
+router.post(
+  '/push/subscribe-web',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(WebPushSubscriptionSchema),
+  subscribeWeb
+);
+
+// Push subscription
+router.delete(
+  '/push/unsubscribe-web',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(WebPushUnsubscriptionSchema),
+  unsubscribeWeb
 );
 
 export default router;
