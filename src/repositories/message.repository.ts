@@ -1,5 +1,6 @@
 import { EntityManager, MoreThan, LessThan, Raw, FindOptionsWhere, In } from 'typeorm';
 import { AppDataSource } from '@config/database';
+import { DeleteMessagesDto } from '@dtos';
 import { Message, Conversation } from '@entities';
 
 type FindMessagesParams = {
@@ -102,5 +103,32 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
   async deleteMessagesOlderThan(cutoff: Date): Promise<number> {
     const result = await this.delete({ createdAt: LessThan(cutoff) });
     return result.affected ?? 0;
+  },
+
+  async deleteMessages({ conversationId, messagesIds }: DeleteMessagesDto) {
+    if (messagesIds.length === 0) {
+      return;
+    }
+
+    const messages = await this.find({
+      where: {
+        conversationId,
+        id: In(messagesIds),
+      },
+      relations: { attachments: true },
+      select: {
+        id: true,
+        attachments: { id: true, storageKey: true },
+      },
+    });
+
+    await this.nullifyLastMessageReferences(messagesIds);
+
+    await this.delete({
+      conversationId,
+      id: In(messagesIds),
+    });
+
+    return messages;
   },
 });

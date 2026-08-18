@@ -41,6 +41,11 @@ export const ListConversationsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(env.MAX_PAGE_SIZE).default(env.DEFAULT_PAGE_SIZE),
 });
 
+export const DeleteMessagesSchema = z.object({
+  conversationId: z.uuid(),
+  messagesIds: z.array(z.uuid()),
+});
+
 export type CreateGroupDto = z.infer<typeof CreateGroupSchema>;
 export type LeaveGroupDto = z.infer<typeof LeaveGroupSchema>;
 export type TransferOwnershipDto = z.infer<typeof TransferOwnershipSchema>;
@@ -49,3 +54,4 @@ export type DeleteConversationDto = z.infer<typeof DeleteConversationSchema>;
 export type GetConversationMessagesDto = z.infer<typeof GetConversationMessagesSchema>;
 export type TypingDto = z.infer<typeof TypingSchema>;
 export type ListConversationsDto = z.infer<typeof ListConversationsSchema>;
+export type DeleteMessagesDto = z.infer<typeof DeleteMessagesSchema>;

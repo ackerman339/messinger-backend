@@ -21,6 +21,7 @@ import {
   ListConversationsSchema,
   WebPushSubscriptionSchema,
   WebPushUnsubscriptionSchema,
+  DeleteMessagesSchema,
 } from '@dtos';
 
 import {
@@ -51,6 +52,7 @@ import {
   listAdmins,
   subscribeWeb,
   unsubscribeWeb,
+  deleteMessages,
 } from '@controllers';
 
 const router = Router();
@@ -153,6 +155,14 @@ router.delete(
   authorize(UserRole.USER),
   validateDTO(DeleteConversationSchema),
   deletePrivateConversation
+);
+
+router.delete(
+  '/conversation/delete-messages',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(DeleteMessagesSchema),
+  deleteMessages
 );
 
 // Admin and super admin endpoints

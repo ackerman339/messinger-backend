@@ -4,12 +4,15 @@ import { AppDataSource } from '@config/database';
 import { MessageStatus, ConversationType } from '@appTypes';
 import { NotFoundException, ForbiddenException } from '@exceptions';
 import { conversationService, storageService } from '@services';
+
 import {
   PrivateMessageDto,
   GroupMessageDto,
   MessageDeliveryDto,
   GetConversationMessagesDto,
+  DeleteMessagesDto,
 } from '@dtos';
+
 import {
   ConversationRepository,
   ConversationMemberRepository,
@@ -288,6 +291,10 @@ class MessageService {
     });
 
     return delivery;
+  }
+
+  async deleteMessages(dto: DeleteMessagesDto) {
+    return await MessageRepository.deleteMessages(dto);
   }
 }
 

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { conversationService, messageService } from '@services';
+import { conversationService, messageService, storageService } from '@services';
 import {
   CreateGroupDto,
   LeaveGroupDto,
@@ -8,6 +8,7 @@ import {
   DeleteConversationDto,
   GetConversationMessagesDto,
   ListConversationsDto,
+  DeleteMessagesDto,
 } from '@dtos';
 
 export async function getConversationsBootstrap(_req: Request, res: Response) {
@@ -87,5 +88,16 @@ export async function deletePrivateConversation(_req: Request, res: Response) {
   const userId = res.locals.userId!;
   await conversationService.deletePrivateConversation(userId, dto.conversationId);
 
+  res.sendStatus(204);
+}
+
+export async function deleteMessages(_req: Request, res: Response) {
+  const dto = res.locals.validatedDto as DeleteMessagesDto;
+  const messages = await messageService.deleteMessages(dto);
+  const storageKeys = messages!.flatMap((message) =>
+    message.attachments.map((attachment) => attachment.storageKey)
+  );
+
+  await storageService.deleteFiles(storageKeys);
   res.sendStatus(204);
 }
