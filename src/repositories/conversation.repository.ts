@@ -114,7 +114,7 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
         'conversation.updatedAt',
       ])
       .leftJoin('conversation.members', 'members')
-      .addSelect(['members.conversationId'])
+      .addSelect(['members.conversationId', 'members.unreadCount'])
       .leftJoin('members.user', 'user')
       .addSelect(['user.id', 'user.username', 'user.lastSeenAt'])
       .whereInIds(conversationIds)

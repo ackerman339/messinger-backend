@@ -9,6 +9,7 @@ import {
   GetConversationMessagesDto,
   ListConversationsDto,
   DeleteMessagesDto,
+  ResetUnreadMessagesCountDto,
 } from '@dtos';
 
 export async function getConversationsBootstrap(_req: Request, res: Response) {
@@ -99,5 +100,13 @@ export async function deleteMessages(_req: Request, res: Response) {
   );
 
   await storageService.deleteFiles(storageKeys);
+  res.sendStatus(204);
+}
+
+export async function resetUnreadMessagesCount(_req: Request, res: Response) {
+  const dto = res.locals.validatedDto as ResetUnreadMessagesCountDto;
+  const userId = res.locals.userId!;
+
+  await conversationService.resetUnreadMessagesCount(userId, dto);
   res.sendStatus(204);
 }

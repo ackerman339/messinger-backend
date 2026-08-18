@@ -15,6 +15,7 @@ import {
   RemoveMemberDto,
   DeleteConversationDto,
   ListConversationsDto,
+  ResetUnreadMessagesCountDto,
 } from '@dtos';
 
 import {
@@ -519,16 +520,24 @@ class ConversationService {
           messagesCursor: nextCursor,
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
-          members: conversation.members
-            .filter((member) => member.user.id !== userId)
-            .map((member) => ({
-              ...member.user,
-            })),
+          lastMessage: page.at(-1),
+          members: conversation.members.map((member) => ({
+            userId: member.user.id,
+            username: member.user.username,
+            lastSeenAt: member.user.lastSeenAt,
+            unreadCount: member.unreadCount,
+          })),
         };
       })
     );
 
     return { page: conversationsWithMessages, nextCursor };
+  }
+
+  async resetUnreadMessagesCount(userId: string, dto: ResetUnreadMessagesCountDto) {
+    return AppDataSource.transaction(async (manager) => {
+      await ConversationMemberRepository.resetUnreadCount(dto.conversationId, userId, manager);
+    });
   }
 }
 

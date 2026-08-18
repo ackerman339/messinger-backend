@@ -12,6 +12,8 @@ export async function privateMessageHandler({
 }: WsHandlers<PrivateMessageDto>) {
   requireAuthentication(connection);
 
+  let data = {};
+
   const { receiverId, content, attachments } = PrivateMessageSchema.parse(message.data);
   const senderId = connection.userId;
 
@@ -33,19 +35,29 @@ export async function privateMessageHandler({
     }
 
     const connections = connectionManager.getUserConnections(member.userId);
+    data = {
+      senderId,
+      content,
+      messageId: savedMessage.id,
+      conversation: {
+        ...savedMessage.conversation,
+        lastMessage: savedMessage,
+        members: savedMessage.conversation.members.map((member) => ({
+          userId: member.user.id,
+          username: member.user.username,
+          lastSeenAt: member.user.lastSeenAt,
+          unreadCount: member.unreadCount,
+        })),
+      },
+      createdAt: savedMessage.createdAt,
+      attachments: savedMessage.savedAttachments,
+    };
 
     // User is connected through WebSocket.
     for (const receiverConnection of connections) {
       sendMessage(receiverConnection, {
         type: WS_SERVER_EVENTS.NEW_MESSAGE,
-        data: {
-          senderId,
-          content,
-          messageId: savedMessage.id,
-          conversation: savedMessage.conversation,
-          createdAt: savedMessage.createdAt,
-          attachments: savedMessage.savedAttachments,
-        },
+        data,
       });
     }
 
@@ -66,13 +78,6 @@ export async function privateMessageHandler({
   // Confirm persistence to sender.
   sendMessage(connection, {
     type: WS_SERVER_EVENTS.MESSAGE_SENT,
-    data: {
-      senderId,
-      content,
-      messageId: savedMessage.id,
-      conversation: savedMessage.conversation,
-      createdAt: savedMessage.createdAt,
-      attachments: savedMessage.savedAttachments,
-    },
+    data,
   });
 }

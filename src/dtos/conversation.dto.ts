@@ -46,6 +46,10 @@ export const DeleteMessagesSchema = z.object({
   messagesIds: z.array(z.uuid()),
 });
 
+export const ResetUnreadMessagesCountSchema = z.object({
+  conversationId: z.uuid(),
+});
+
 export type CreateGroupDto = z.infer<typeof CreateGroupSchema>;
 export type LeaveGroupDto = z.infer<typeof LeaveGroupSchema>;
 export type TransferOwnershipDto = z.infer<typeof TransferOwnershipSchema>;
@@ -55,3 +59,4 @@ export type GetConversationMessagesDto = z.infer<typeof GetConversationMessagesS
 export type TypingDto = z.infer<typeof TypingSchema>;
 export type ListConversationsDto = z.infer<typeof ListConversationsSchema>;
 export type DeleteMessagesDto = z.infer<typeof DeleteMessagesSchema>;
+export type ResetUnreadMessagesCountDto = z.infer<typeof ResetUnreadMessagesCountSchema>;

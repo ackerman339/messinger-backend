@@ -22,6 +22,7 @@ import {
   WebPushSubscriptionSchema,
   WebPushUnsubscriptionSchema,
   DeleteMessagesSchema,
+  ResetUnreadMessagesCountSchema,
 } from '@dtos';
 
 import {
@@ -53,6 +54,7 @@ import {
   subscribeWeb,
   unsubscribeWeb,
   deleteMessages,
+  resetUnreadMessagesCount,
 } from '@controllers';
 
 const router = Router();
@@ -163,6 +165,14 @@ router.delete(
   authorize(UserRole.USER),
   validateDTO(DeleteMessagesSchema),
   deleteMessages
+);
+
+router.patch(
+  '/conversation/reset-unread-messages-count',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(ResetUnreadMessagesCountSchema),
+  resetUnreadMessagesCount
 );
 
 // Admin and super admin endpoints
