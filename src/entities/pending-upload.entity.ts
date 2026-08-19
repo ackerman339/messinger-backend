@@ -1,5 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
-
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { User } from './user.entity';
 @Entity('pending_uploads')
 export class PendingUpload {
   @PrimaryGeneratedColumn('uuid')
@@ -10,6 +18,14 @@ export class PendingUpload {
     type: 'uuid',
   })
   userId: string;
+
+  @ManyToOne(() => User, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({
+    name: 'user_id',
+  })
+  user: User;
 
   @Column({
     type: 'varchar',

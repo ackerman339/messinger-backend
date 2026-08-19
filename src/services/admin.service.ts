@@ -1,12 +1,13 @@
 import bcrypt from 'bcrypt';
+import { In } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { env } from '@config/environment';
 import { UserRole } from '@appTypes';
 import { UserDto, ListUserMessagesDto, ListUsersDto, ListConversationsDto } from '@dtos';
 import { LOGIN_KEY_LENGTH } from '@constants';
-import { User, Conversation, ConversationMember } from '@entities';
+import { User, Conversation, ConversationMember, Message } from '@entities';
 import { generateRandomString, generateLoginKeyLookup, paginate } from '@utils';
-import { messageService } from '@services';
+import { messageService, storageService } from '@services';
 import { UserRepository, ConversationRepository } from '@repositories';
 
 class AdminService {
@@ -27,6 +28,7 @@ class AdminService {
 
   async deleteUser(dto: UserDto) {
     await AppDataSource.transaction(async (manager) => {
+      // 1. Get the conversations where the user is a member.
       const memberships = await manager.find(ConversationMember, {
         where: {
           userId: dto.userId,
@@ -35,16 +37,12 @@ class AdminService {
 
       const conversationIds = memberships.map((membership) => membership.conversationId);
 
-      await manager.delete(User, {
-        id: dto.userId,
-      });
-
       if (conversationIds.length > 0) {
-        await manager
-          .createQueryBuilder()
-          .delete()
-          .from(Conversation)
-          .where('id IN (:...conversationIds)', {
+        // 2. Find conversations that will have no members after deleting this user.
+        const conversationsToDelete = await manager
+          .createQueryBuilder(Conversation, 'conversation')
+          .select('conversation.id', 'id')
+          .where('conversation.id IN (:...conversationIds)', {
             conversationIds,
           })
           .andWhere(
@@ -52,12 +50,64 @@ class AdminService {
           NOT EXISTS (
             SELECT 1
             FROM conversation_members cm
-            WHERE cm.conversation_id = conversations.id
+            WHERE cm.conversation_id = conversation.id
+              AND cm.user_id != :userId
           )
         `
           )
-          .execute();
+          .setParameter('userId', dto.userId)
+          .getRawMany<{ id: string }>();
+
+        const conversationIdsToDelete = conversationsToDelete.map(
+          (conversation) => conversation.id
+        );
+
+        // 3. Delete R2 files belonging to messages from conversations that will actually be deleted.
+        if (conversationIdsToDelete.length > 0) {
+          const messages = await manager.find(Message, {
+            where: {
+              conversationId: In(conversationIdsToDelete),
+            },
+            relations: {
+              attachments: true,
+            },
+            select: {
+              attachments: {
+                id: true,
+                storageKey: true,
+              },
+            },
+          });
+
+          const storageKeys = messages.flatMap((message) =>
+            message.attachments.map((attachment) => attachment.storageKey)
+          );
+
+          if (storageKeys.length > 0) {
+            await storageService.deleteFiles(storageKeys);
+          }
+
+          // 4. Delete the conversations.
+          // Conversation -> Message = CASCADE
+          // Message -> MessageAttachment = CASCADE
+          await manager
+            .createQueryBuilder()
+            .delete()
+            .from(Conversation)
+            .where('id IN (:...conversationIds)', {
+              conversationIds: conversationIdsToDelete,
+            })
+            .execute();
+        }
       }
+
+      // 5. Delete the user.
+      // conversation_members -> CASCADE
+      // pending uploads -> CASCADE
+      // messages.sender_id -> SET NULL
+      await manager.delete(User, {
+        id: dto.userId,
+      });
     });
   }
 
