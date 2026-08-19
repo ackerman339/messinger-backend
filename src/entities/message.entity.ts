@@ -27,6 +27,7 @@ export class Message {
 
   @Column({
     type: 'uuid',
+    nullable: true,
   })
   senderId: string;
 
@@ -61,7 +62,7 @@ export class Message {
   })
   conversation: Conversation;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({
     name: 'sender_id',
   })

@@ -9,3 +9,4 @@ export * from './1786402083868-IndexMigration';
 export * from './1786647120680-UserSessionMigration';
 export * from './1786994228394-PushNotificationMigration';
 export * from './1787100031294-MessageDeletionMigration';
+export * from './1787100739442-MessageMigrationOnUserDeletion';
