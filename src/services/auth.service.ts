@@ -15,7 +15,7 @@ import {
 } from '@utils';
 
 class AuthService {
-  private async hashLoginKeyOrPassword(key: string) {
+  async hashLoginKeyOrPassword(key: string) {
     return await bcrypt.hash(key, env.SALT_ROUNDS);
   }
 
@@ -51,7 +51,7 @@ class AuthService {
       throw new NotFoundException('USER_NOT_FOUND');
     }
 
-    const isValidLoginKey = await this.compareLoginKeyOrPassword(loginKey, user.loginKeyHash);
+    const isValidLoginKey = await this.compareLoginKeyOrPassword(loginKey, user.loginKeyHash!);
 
     if (!isValidLoginKey) {
       throw new UnauthorizedException('INVALID_LOGIN_KEY');
@@ -159,10 +159,6 @@ class AuthService {
 
     const passwordHash = await this.hashLoginKeyOrPassword(password);
     const newUser = UserRepository.create({
-      username: '',
-      userCode: '',
-      loginKeyHash: '',
-      loginKeyLookup: '',
       adminName,
       passwordHash,
       role: UserRole.ADMIN,
@@ -170,7 +166,7 @@ class AuthService {
 
     await UserRepository.save(newUser);
 
-    return { adminName, password };
+    return { id: newUser.id, adminName: newUser.adminName, createdAt: newUser.createdAt };
   }
 }
 

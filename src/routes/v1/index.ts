@@ -55,6 +55,7 @@ import {
   unsubscribeWeb,
   deleteMessages,
   resetUnreadMessagesCount,
+  updateAdminPassword,
 } from '@controllers';
 
 const router = Router();
@@ -240,6 +241,14 @@ router.get(
   authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
   validateDTO(ListUserMessagesSchema),
   listConversationMessages
+);
+
+router.patch(
+  '/admin/update-password',
+  authenticate,
+  authorize(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  validateDTO(AdminSchema.pick({ password: true })),
+  updateAdminPassword
 );
 
 // Push subscription

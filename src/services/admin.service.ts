@@ -1,24 +1,18 @@
-import bcrypt from 'bcrypt';
 import { In } from 'typeorm';
 import { AppDataSource } from '@config/database';
-import { env } from '@config/environment';
 import { UserRole } from '@appTypes';
-import { UserDto, ListUserMessagesDto, ListUsersDto, ListConversationsDto } from '@dtos';
+import { UserDto, ListUserMessagesDto, ListUsersDto, ListConversationsDto, AdminDto } from '@dtos';
 import { LOGIN_KEY_LENGTH } from '@constants';
 import { User, Conversation, ConversationMember, Message } from '@entities';
 import { generateRandomString, generateLoginKeyLookup, paginate } from '@utils';
-import { messageService, storageService } from '@services';
+import { messageService, storageService, authService } from '@services';
 import { UserRepository, ConversationRepository } from '@repositories';
 
 class AdminService {
-  private async hashLoginKey(key: string) {
-    return await bcrypt.hash(key, env.SALT_ROUNDS);
-  }
-
   async restoreUserLoginKey(dto: UserDto) {
     const { userId } = dto;
     const loginKey = generateRandomString(LOGIN_KEY_LENGTH);
-    const loginKeyHash = await this.hashLoginKey(loginKey);
+    const loginKeyHash = await authService.hashLoginKeyOrPassword(loginKey);
     const loginKeyLookup = generateLoginKeyLookup(loginKey);
 
     await UserRepository.update({ id: userId }, { loginKeyHash, loginKeyLookup });
@@ -147,6 +141,11 @@ class AdminService {
 
   async listConversationMessages(dto: ListUserMessagesDto) {
     return messageService.getConversationMessages(dto.userId, { ...dto });
+  }
+
+  async updateAdminPassword(userId: string, dto: Pick<AdminDto, 'password'>) {
+    const passwordHash = await authService.hashLoginKeyOrPassword(dto.password);
+    return UserRepository.update({ id: userId }, { passwordHash });
   }
 }
 

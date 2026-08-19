@@ -99,3 +99,12 @@ export async function listConversationMessages(_req: Request, res: Response) {
     result,
   });
 }
+
+export async function updateAdminPassword(_req: Request, res: Response) {
+  const dto = res.locals.validatedDto as Pick<AdminDto, 'password'>;
+  const userId = res.locals.userId!;
+
+  await adminService.updateAdminPassword(userId, dto);
+
+  res.sendStatus(204);
+}
