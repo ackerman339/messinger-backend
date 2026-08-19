@@ -52,6 +52,7 @@ export class Conversation {
 
   @ManyToOne(() => Message, {
     nullable: true,
+    onDelete: 'SET NULL',
   })
   @JoinColumn({
     name: 'last_message_id',

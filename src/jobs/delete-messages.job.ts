@@ -35,20 +35,7 @@ async function deleteMessages() {
     return;
   }
 
-  // 2. If a message is referenced as last_message in conversation table
-  // mark it as null
-  try {
-    await MessageRepository.nullifyLastMessageReferences(messagesIds);
-    logger.info('[message-cleanup] Cleared lastMessageId references for affected conversations.');
-  } catch (error) {
-    logger.error(
-      '[message-cleanup] Failed to clear lastMessageId references, aborting job:',
-      error
-    );
-    return;
-  }
-
-  // 3. Delete the files in R2 — if this fails, it's just logged and does NOT
+  // 2. Delete the files in R2 — if this fails, it's just logged and does NOT
   //    affect the job outcome: the messages were already deleted successfully.
   try {
     await storageService.deleteFiles(storageKeys);
@@ -58,7 +45,7 @@ async function deleteMessages() {
     return;
   }
 
-  // 4. Delete messages (attachments and deliveries are removed by DB cascade).
+  // 3. Delete messages (attachments and deliveries are removed by DB cascade).
   try {
     let deletedMessages = 0;
     deletedMessages = await MessageRepository.deleteMessagesOlderThan(cutoff);
