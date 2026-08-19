@@ -21,28 +21,32 @@ export class User {
   @Column({
     type: 'varchar',
     length: 100,
+    nullable: true,
   })
-  username: string;
+  username: string | null;
 
   @Column({
     type: 'text',
+    nullable: true,
   })
-  loginKeyHash: string;
+  loginKeyHash: string | null;
 
   @Column({
     type: 'varchar',
     length: 64,
     unique: true,
+    nullable: true,
   })
-  loginKeyLookup: string;
+  loginKeyLookup: string | null;
 
   @Column({
     type: 'varchar',
     length: 10,
     unique: true,
+    nullable: true,
   })
   @Index('idx_user_code')
-  userCode: string;
+  userCode: string | null;
 
   @Column({
     type: 'text',

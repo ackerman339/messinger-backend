@@ -20,10 +20,6 @@ export const adminSeed = async (dataSource: typeof AppDataSource) => {
   const passwordHash = await bcrypt.hash(env.ADMIN_PASSWORD, env.SALT_ROUNDS);
 
   const newUser = UserRepository.create({
-    username: '',
-    userCode: '',
-    loginKeyHash: '',
-    loginKeyLookup: '',
     adminName: env.ADMIN_NAME,
     passwordHash,
     role: UserRole.SUPER_ADMIN,

@@ -34,6 +34,7 @@ export const UserRepository = AppDataSource.getRepository(User).extend({
         id: true,
         username: true,
         lastSeenAt: true,
+        adminName: true,
         createdAt: true,
       },
       order: {
