@@ -1,9 +1,10 @@
 import bcrypt from 'bcrypt';
+import { AppDataSource } from '@config/database';
 import { env } from '@config/environment';
 import { UserRole } from '@appTypes';
 import { UserDto, ListUserMessagesDto, ListUsersDto, ListConversationsDto } from '@dtos';
 import { LOGIN_KEY_LENGTH } from '@constants';
-import { User, Conversation } from '@entities';
+import { User, Conversation, ConversationMember } from '@entities';
 import { generateRandomString, generateLoginKeyLookup, paginate } from '@utils';
 import { messageService } from '@services';
 import { UserRepository, ConversationRepository } from '@repositories';
@@ -25,7 +26,39 @@ class AdminService {
   }
 
   async deleteUser(dto: UserDto) {
-    await UserRepository.delete({ id: dto.userId });
+    await AppDataSource.transaction(async (manager) => {
+      const memberships = await manager.find(ConversationMember, {
+        where: {
+          userId: dto.userId,
+        },
+      });
+
+      const conversationIds = memberships.map((membership) => membership.conversationId);
+
+      await manager.delete(User, {
+        id: dto.userId,
+      });
+
+      if (conversationIds.length > 0) {
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Conversation)
+          .where('id IN (:...conversationIds)', {
+            conversationIds,
+          })
+          .andWhere(
+            `
+          NOT EXISTS (
+            SELECT 1
+            FROM conversation_members cm
+            WHERE cm.conversation_id = conversations.id
+          )
+        `
+          )
+          .execute();
+      }
+    });
   }
 
   async deleteAdmin(dto: UserDto) {
