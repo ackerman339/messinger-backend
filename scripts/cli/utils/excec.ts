@@ -1,32 +1,52 @@
 import { execSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 /**
- * Finds a running Docker container whose name matches the project name.
- * Exits the process if no matching container is found or if it is not running.
+ * Ensures that a Docker container exists and is currently running.
+ * Exits the process if the container is missing or stopped.
  */
-function findContainer(projectName: string): string {
+function ensureContainerRunning(container: string): void {
   try {
-    const result = execSync(`docker ps --filter "name=^${projectName}$" --format "{{.ID}}"`, {
-      encoding: 'utf8',
+    const result = execSync(`docker inspect -f '{{.State.Running}}' ${container}`, {
       stdio: ['pipe', 'pipe', 'ignore'],
-    }).trim();
+    })
+      .toString()
+      .trim();
 
-    if (!result) {
-      console.error(`Container "${projectName}" does not exist or is not running.`);
+    if (result !== 'true') {
+      console.error(`Container "${container}" exists but is not running.`);
       process.exit(1);
     }
-
-    return result.split('\n')[0];
   } catch {
-    console.error(`Failed to find container "${projectName}".`);
+    console.error(`Container "${container}" does not exist.`);
     process.exit(1);
   }
 }
 
 /**
- * Executes a command inside a running Docker container.
+ * Checks whether the current process is running inside a Docker container.
+ */
+function isRunningInDocker(): boolean {
+  return existsSync('/.dockerenv');
+}
+
+/**
+ * Executes a command.
+ *
+ * When running inside Docker, the command is executed directly.
+ *
+ * When running on the host, the command is executed inside
+ * the Docker container defined by PROJECT_NAME.
  */
 export function run(command: string): void {
+  if (isRunningInDocker()) {
+    execSync(command, {
+      stdio: 'inherit',
+    });
+
+    return;
+  }
+
   const projectName = process.env.PROJECT_NAME;
 
   if (!projectName) {
@@ -34,9 +54,9 @@ export function run(command: string): void {
     process.exit(1);
   }
 
-  const container = findContainer(projectName);
+  ensureContainerRunning(projectName);
 
-  execSync(`docker exec -i ${container} ${command}`, {
+  execSync(`docker exec -i ${projectName} ${command}`, {
     stdio: 'inherit',
   });
 }
