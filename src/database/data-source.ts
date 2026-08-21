@@ -18,4 +18,5 @@ export const AppDataSource = new DataSource({
   logger: new TypeOrmLogger(),
   entities: Object.values(Entities),
   migrations: Object.values(Migrations),
+  migrationsTransactionMode: 'each',
 });
