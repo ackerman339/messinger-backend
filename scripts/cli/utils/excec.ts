@@ -1,23 +1,24 @@
 import { execSync } from 'node:child_process';
 
 /**
- * Ensures that a Docker container exists and is currently running.
- * Exits the process if the container is missing or stopped.
+ * Finds a running Docker container whose name matches the project name.
+ * Exits the process if no matching container is found or if it is not running.
  */
-function ensureContainerRunning(container: string): void {
+function findContainer(projectName: string): string {
   try {
-    const result = execSync(`docker inspect -f '{{.State.Running}}' ${container}`, {
+    const result = execSync(`docker ps --filter "name=^${projectName}$" --format "{{.ID}}"`, {
+      encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim();
+    }).trim();
 
-    if (result !== 'true') {
-      console.error(`Container "${container}" exists but is not running.`);
+    if (!result) {
+      console.error(`Container "${projectName}" does not exist or is not running.`);
       process.exit(1);
     }
+
+    return result.split('\n')[0];
   } catch {
-    console.error(`Container "${container}" does not exist.`);
+    console.error(`Failed to find container "${projectName}".`);
     process.exit(1);
   }
 }
@@ -27,14 +28,14 @@ function ensureContainerRunning(container: string): void {
  */
 export function run(command: string): void {
   const projectName = process.env.PROJECT_NAME;
-  const container = `${projectName}`;
 
   if (!projectName) {
     console.error('PROJECT_NAME is not defined in .env');
     process.exit(1);
   }
 
-  ensureContainerRunning(container);
+  const container = findContainer(projectName);
+
   execSync(`docker exec -i ${container} ${command}`, {
     stdio: 'inherit',
   });
