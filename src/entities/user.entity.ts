@@ -22,6 +22,7 @@ export class User {
     type: 'varchar',
     length: 100,
     nullable: true,
+    unique: true,
   })
   username: string | null;
 
@@ -71,6 +72,7 @@ export class User {
     type: 'varchar',
     length: 255,
     nullable: true,
+    unique: true,
   })
   adminName: string | null;
 

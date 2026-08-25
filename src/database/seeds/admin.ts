@@ -9,7 +9,7 @@ export const adminSeed = async (dataSource: typeof AppDataSource) => {
   const UserRepository = dataSource.getRepository(User);
 
   const existingAdmin = await UserRepository.findOne({
-    where: { role: UserRole.ADMIN, adminName: env.ADMIN_NAME },
+    where: { role: UserRole.SUPER_ADMIN, adminName: env.ADMIN_NAME },
   });
 
   if (existingAdmin) {

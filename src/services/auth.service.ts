@@ -25,6 +25,12 @@ class AuthService {
 
   async signup(dto: SignUpDto) {
     const { username, role } = dto;
+    const user = await UserRepository.findOne({ where: { username } });
+
+    if (user) {
+      throw new ConflictException('USER_ALREADY_EXISTS');
+    }
+
     const userCode = generateRandomString(USER_CODE_LENGTH);
     const loginKey = generateRandomString(LOGIN_KEY_LENGTH);
     const loginKeyHash = await this.hashLoginKeyOrPassword(loginKey);
