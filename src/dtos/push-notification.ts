@@ -5,8 +5,9 @@ export const PushNotificationSchema = z.object({
   body: z.string().min(1),
   icon: z.string().optional(),
   data: z.object({
-    conversationId: z.string().uuid(),
-    messageId: z.string().uuid(),
+    type: z.enum(['request-connection', 'message']),
+    conversationId: z.uuid(),
+    messageId: z.uuid().optional(),
   }),
 });
 

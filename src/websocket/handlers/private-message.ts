@@ -68,6 +68,7 @@ export async function privateMessageHandler({
         body: content,
         icon: '/pwa-192x192.png',
         data: {
+          type: 'message',
           messageId: savedMessage.id,
           conversationId: savedMessage.conversation.id,
         },

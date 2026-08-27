@@ -1,5 +1,12 @@
 import { Request, Response } from 'express';
-import { conversationService, messageService, storageService } from '@services';
+
+import {
+  conversationService,
+  messageService,
+  storageService,
+  pushNotificationService,
+} from '@services';
+
 import {
   CreateGroupDto,
   LeaveGroupDto,
@@ -10,6 +17,7 @@ import {
   ListConversationsDto,
   DeleteMessagesDto,
   ResetUnreadMessagesCountDto,
+  RequestConnectionDto,
 } from '@dtos';
 
 export async function getConversationsBootstrap(_req: Request, res: Response) {
@@ -108,5 +116,21 @@ export async function resetUnreadMessagesCount(_req: Request, res: Response) {
   const userId = res.locals.userId!;
 
   await conversationService.resetUnreadMessagesCount(userId, dto);
+  res.sendStatus(204);
+}
+
+export async function requestUserConnection(_req: Request, res: Response) {
+  const dto = res.locals.validatedDto as RequestConnectionDto;
+
+  await pushNotificationService.sendToUser(dto.targetUserId, {
+    title: dto.senderName,
+    body: 'Necesito que te conectes',
+    icon: '/pwa-192x192.png',
+    data: {
+      type: 'request-connection',
+      conversationId: dto.conversationId,
+    },
+  });
+
   res.sendStatus(204);
 }

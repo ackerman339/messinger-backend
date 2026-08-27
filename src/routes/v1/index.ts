@@ -23,6 +23,7 @@ import {
   WebPushUnsubscriptionSchema,
   DeleteMessagesSchema,
   ResetUnreadMessagesCountSchema,
+  RequestConnectionSchema,
 } from '@dtos';
 
 import {
@@ -56,6 +57,7 @@ import {
   deleteMessages,
   resetUnreadMessagesCount,
   updateAdminPassword,
+  requestUserConnection,
 } from '@controllers';
 
 const router = Router();
@@ -260,13 +262,20 @@ router.post(
   subscribeWeb
 );
 
-// Push subscription
 router.delete(
   '/push/unsubscribe-web',
   authenticate,
   authorize(UserRole.USER),
   validateDTO(WebPushUnsubscriptionSchema),
   unsubscribeWeb
+);
+
+router.post(
+  '/push/request-user-connection',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(RequestConnectionSchema),
+  requestUserConnection
 );
 
 export default router;
