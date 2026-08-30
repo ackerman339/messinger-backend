@@ -58,6 +58,7 @@ import {
   resetUnreadMessagesCount,
   updateAdminPassword,
   requestUserConnection,
+  emptyMessages,
 } from '@controllers';
 
 const router = Router();
@@ -176,6 +177,14 @@ router.patch(
   authorize(UserRole.USER),
   validateDTO(ResetUnreadMessagesCountSchema),
   resetUnreadMessagesCount
+);
+
+router.patch(
+  '/conversation/empty-messages',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(DeleteConversationSchema),
+  emptyMessages
 );
 
 // Admin and super admin endpoints

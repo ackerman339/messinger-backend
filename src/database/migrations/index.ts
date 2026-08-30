@@ -12,3 +12,4 @@ export * from './1787100031294-MessageDeletionMigration';
 export * from './1787100739442-MessageMigrationOnUserDeletion';
 export * from './1787111156694-UserMigration';
 export * from './1787692001701-UniqueUsernameMigration';
+export * from './1788102779492-EmptyChatMigration';

@@ -53,6 +53,12 @@ export class ConversationMember {
   restoredAt: Date | null;
 
   @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  emptyMessagesAt: Date | null;
+
+  @Column({
     type: 'integer',
     default: 0,
   })

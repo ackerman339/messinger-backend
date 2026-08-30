@@ -134,3 +134,11 @@ export async function requestUserConnection(_req: Request, res: Response) {
 
   res.sendStatus(204);
 }
+
+export async function emptyMessages(_req: Request, res: Response) {
+  const dto = res.locals.validatedDto as DeleteConversationDto;
+  const userId = res.locals.userId!;
+  await conversationService.emptyMessages(userId, dto.conversationId);
+
+  res.sendStatus(204);
+}

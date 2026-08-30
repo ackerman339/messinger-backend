@@ -232,7 +232,8 @@ class MessageService {
 
   async getConversationMessages(
     userId: string,
-    { conversationId, limit, cursor }: GetConversationMessagesDto
+    { conversationId, limit, cursor }: GetConversationMessagesDto,
+    includeSoftDelete: boolean = true
   ) {
     const member = await ConversationMemberRepository.findMember(conversationId, userId);
 
@@ -241,7 +242,7 @@ class MessageService {
         conversationId,
         limit,
         cursor,
-        lastDeletedAt: member?.softDeletedAt,
+        ...(includeSoftDelete ? { lastDeletedAt: member?.emptyMessagesAt } : {}),
       }),
       ConversationEventRepository.findByConversation({ conversationId, limit, cursor }),
     ]);

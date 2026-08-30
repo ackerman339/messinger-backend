@@ -155,4 +155,18 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
       }
     );
   },
+
+  async emptyMessages(conversationId: string, userId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+
+    await repository.update(
+      {
+        conversationId,
+        userId,
+      },
+      {
+        emptyMessagesAt: new Date(),
+      }
+    );
+  },
 });

@@ -539,6 +539,10 @@ class ConversationService {
       await ConversationMemberRepository.resetUnreadCount(dto.conversationId, userId, manager);
     });
   }
+
+  async emptyMessages(userId: string, conversationId: string) {
+    await ConversationMemberRepository.emptyMessages(conversationId, userId);
+  }
 }
 
 export const conversationService = new ConversationService();
