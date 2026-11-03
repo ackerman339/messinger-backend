@@ -47,8 +47,8 @@ export async function mobileSignin(req: Request, res: Response) {
   const { user, accessToken, refreshToken } = await authService.signin(dto, userAgent, ipAddress);
   const { username, status, id, userCode, avatarUrl, role, createdAt, updatedAt } = user;
 
-  res.setHeader('x-access-Token', accessToken);
-  res.setHeader('x-refresh-Token', refreshToken);
+  res.setHeader('x-access-token', accessToken);
+  res.setHeader('x-refresh-token', refreshToken);
 
   res.status(201).json({
     message: 'User logged successfully',

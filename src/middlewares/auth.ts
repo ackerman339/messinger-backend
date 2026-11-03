@@ -94,8 +94,8 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     const isBearerClient = typeof authorization === 'string' && /^Bearer\s+/i.test(authorization);
 
     if (isBearerClient) {
-      res.setHeader('x-access-Token', result.accessToken);
-      res.setHeader('x-refresh-Token', result.refreshToken);
+      res.setHeader('x-access-token', result.accessToken);
+      res.setHeader('x-refresh-token', result.refreshToken);
     } else {
       setAuthCookies(res, result.accessToken, result.refreshToken);
     }
