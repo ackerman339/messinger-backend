@@ -140,7 +140,7 @@ class AdminService {
   }
 
   async listConversationMessages(dto: ListUserMessagesDto) {
-    return messageService.getConversationMessages(dto.userId, { ...dto }, false);
+    return messageService.getConversationMessages(dto.userId, { ...dto });
   }
 
   async updateAdminPassword(userId: string, dto: Pick<AdminDto, 'password'>) {
