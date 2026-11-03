@@ -1,22 +1,7 @@
 import { Request, Response } from 'express';
 import { authService, userService } from '@services';
-import { SignUpDto, SignInDto } from '@dtos';
+import { SignInDto } from '@dtos';
 import { getClientInfo, setAuthCookies, clearAuthCookies } from '@utils';
-
-export async function signup(_req: Request, res: Response) {
-  const dto = res.locals.validatedDto as SignUpDto;
-  const { user, loginKey } = await authService.signup(dto);
-  const { username, status } = user;
-
-  res.status(201).json({
-    message: 'User created successfully',
-    result: {
-      username,
-      status,
-      loginKey,
-    },
-  });
-}
 
 export async function signin(req: Request, res: Response) {
   const { userAgent, ipAddress } = getClientInfo(req);

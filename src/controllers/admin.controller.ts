@@ -1,7 +1,15 @@
 import { Request, Response } from 'express';
-import { AdminDto, UserDto, ListUserMessagesDto, ListUsersDto, ListConversationsDto } from '@dtos';
 import { authService, adminService } from '@services';
 import { getClientInfo, setAuthCookies } from '@utils';
+
+import {
+  AdminDto,
+  UserDto,
+  ListUserMessagesDto,
+  ListUsersDto,
+  ListConversationsDto,
+  SignUpDto,
+} from '@dtos';
 
 export async function createAdmin(_req: Request, res: Response) {
   const dto = res.locals.validatedDto as AdminDto;
@@ -107,4 +115,19 @@ export async function updateAdminPassword(_req: Request, res: Response) {
   await adminService.updateAdminPassword(userId, dto);
 
   res.sendStatus(204);
+}
+
+export async function createUser(_req: Request, res: Response) {
+  const dto = res.locals.validatedDto as SignUpDto;
+  const { user, loginKey } = await authService.signup(dto);
+  const { username, status } = user;
+
+  res.status(201).json({
+    message: 'User created successfully',
+    result: {
+      username,
+      status,
+      loginKey,
+    },
+  });
 }
