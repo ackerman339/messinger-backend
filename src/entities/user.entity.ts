@@ -12,6 +12,7 @@ import {
 import { UserRole, UserStatus } from '@appTypes';
 import { Session } from './user-session.entity';
 import { PushSubscription } from './push-subscription.entity';
+import { Call } from './call.entity';
 
 @Entity('users')
 export class User {
@@ -111,4 +112,10 @@ export class User {
 
   @OneToMany(() => PushSubscription, (pushSubscription) => pushSubscription.user)
   pushSubscriptions: PushSubscription[];
+
+  @OneToMany(() => Call, (call) => call.caller)
+  sentCalls: Call[];
+
+  @OneToMany(() => Call, (call) => call.callee)
+  receivedCalls: Call[];
 }
