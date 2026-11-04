@@ -59,6 +59,7 @@ import {
   updateAdminPassword,
   requestUserConnection,
   emptyMessages,
+  getTurnCredentials,
 } from '@controllers';
 
 const router = Router();
@@ -293,5 +294,8 @@ router.post(
   validateDTO(RequestConnectionSchema),
   requestUserConnection
 );
+
+// TURN routes
+router.get('/turn/credentials', authenticate, getTurnCredentials);
 
 export default router;
