@@ -9,3 +9,4 @@ export * from './group-invitation.repository';
 export * from './pending-upload.repository';
 export * from './message-attachment.repository';
 export * from './push-subscription.repository';
+export * from './call.repository';
