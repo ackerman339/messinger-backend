@@ -28,6 +28,7 @@ export async function callInitHandler({ connection, message }: WsHandlers<CallIn
       media: call.media,
       status: call.status,
       createdAt: call.createdAt,
+      expiresAt: call.expiresAt,
     },
   });
 
@@ -41,6 +42,7 @@ export async function callInitHandler({ connection, message }: WsHandlers<CallIn
         callerId: call.callerId,
         media: call.media,
         createdAt: call.createdAt,
+        expiresAt: call.expiresAt,
       },
     });
   }

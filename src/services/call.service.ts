@@ -1,5 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@exceptions';
-import { CallMedia } from '@appTypes';
+import { CallMedia, CallStatus } from '@appTypes';
 import { CallInitDto } from '@dtos';
 import { CallRepository, UserRepository } from '@repositories';
 
@@ -104,6 +104,41 @@ export class CallService {
       receiverId: isCaller ? call.calleeId : call.callerId,
       receiverConnectionId: isCaller ? call.calleeConnectionId : call.callerConnectionId,
     };
+  }
+
+  async timeout(userId: string, connectionId: string, callId: string) {
+    const call = await CallRepository.timeoutIfExpired(callId, userId, connectionId);
+
+    if (!call) {
+      // The cron or another request may have already closed the call.
+      const missedCall = await CallRepository.findOne({
+        where: {
+          id: callId,
+          callerId: userId,
+          callerConnectionId: connectionId,
+          status: CallStatus.MISSED,
+        },
+      });
+
+      if (missedCall) {
+        return null;
+      }
+
+      throw new ForbiddenException('CALL_TIMEOUT_NOT_ALLOWED');
+    }
+
+    return call;
+  }
+
+  async expireRinging() {
+    const calls = await CallRepository.expireRinging();
+
+    return calls.map((call) => ({
+      callId: call.id,
+      callerId: call.caller_id,
+      calleeId: call.callee_id,
+      endedAt: call.ended_at,
+    }));
   }
 }
 

@@ -29,6 +29,7 @@ import {
   callOfferHandler,
   callAnswerHandler,
   callIceCandidateHandler,
+  callTimeoutHandler,
 } from './handlers';
 
 /**
@@ -79,6 +80,7 @@ export function registerEventHandlers() {
     WS_CLIENT_EVENTS.CALL_ICE_CANDIDATE,
     callIceCandidateHandler
   );
+  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_TIMEOUT, callTimeoutHandler);
 
   return dispatcher;
 }

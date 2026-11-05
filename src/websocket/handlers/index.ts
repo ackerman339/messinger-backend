@@ -12,3 +12,4 @@ export * from './call-end';
 export * from './call-offer';
 export * from './call-answer';
 export * from './call-ice-candidate';
+export * from './call-timeout';

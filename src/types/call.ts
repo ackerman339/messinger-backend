@@ -3,6 +3,7 @@ export enum CallStatus {
   ACCEPTED = 'accepted',
   REJECTED = 'rejected',
   ENDED = 'ended',
+  MISSED = 'missed',
 }
 
 export enum CallMedia {

@@ -56,4 +56,7 @@ export class Call {
     nullable: true,
   })
   calleeConnectionId: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  expiresAt: Date | null;
 }

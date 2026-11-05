@@ -1,5 +1,6 @@
-import { In } from 'typeorm';
+import { In, LessThanOrEqual, MoreThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
+import { CALL_RING_TIMEOUT_MS } from '@constants';
 import { CallStatus } from '@appTypes';
 import { Call } from '@entities';
 
@@ -48,6 +49,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         status: CallStatus.RINGING,
         acceptedAt: null,
         endedAt: null,
+        expiresAt: new Date(Date.now() + CALL_RING_TIMEOUT_MS),
       });
 
       return repository.save(call);
@@ -57,17 +59,20 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
   async acceptIfRinging(callId: string, calleeId: string, calleeConnectionId: string) {
     return this.manager.transaction(async (manager) => {
       const repository = manager.getRepository(Call);
+      const now = new Date();
 
       const result = await repository.update(
         {
           id: callId,
           calleeId,
           status: CallStatus.RINGING,
+          expiresAt: MoreThan(now),
         },
         {
           status: CallStatus.ACCEPTED,
           calleeConnectionId,
-          acceptedAt: new Date(),
+          acceptedAt: now,
+          expiresAt: null,
         }
       );
 
@@ -178,5 +183,56 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         },
       ],
     });
+  },
+
+  async timeoutIfExpired(callId: string, callerId: string, callerConnectionId: string) {
+    return this.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Call);
+      const now = new Date();
+
+      const result = await repository.update(
+        {
+          id: callId,
+          callerId,
+          callerConnectionId,
+          status: CallStatus.RINGING,
+          expiresAt: LessThanOrEqual(now),
+        },
+        {
+          status: CallStatus.MISSED,
+          endedAt: now,
+        }
+      );
+
+      if (result.affected !== 1) {
+        return null;
+      }
+
+      return repository.findOneByOrFail({ id: callId });
+    });
+  },
+
+  async expireRinging() {
+    const now = new Date();
+
+    const result = await this.createQueryBuilder()
+      .update(Call)
+      .set({
+        status: CallStatus.MISSED,
+        endedAt: now,
+      })
+      .where('"status" = :status', {
+        status: CallStatus.RINGING,
+      })
+      .andWhere('"expires_at" <= :now', { now })
+      .returning(['id', 'callerId', 'calleeId', 'endedAt'])
+      .execute();
+
+    return result.raw as Array<{
+      id: string;
+      caller_id: string;
+      callee_id: string;
+      ended_at: Date;
+    }>;
   },
 });
