@@ -4,7 +4,11 @@ import { CallInitDto } from '@dtos';
 import { CallRepository, UserRepository } from '@repositories';
 
 export class CallService {
-  async init(callerId: string, callerConnectionId: string, { calleeId, media }: CallInitDto) {
+  async init(
+    callerId: string,
+    callerConnectionId: string,
+    { calleeId, media, requestId }: CallInitDto
+  ) {
     if (callerId === calleeId) {
       throw new ForbiddenException('CALL_SELF_NOT_ALLOWED');
     }
@@ -18,48 +22,62 @@ export class CallService {
       throw new NotFoundException('CALL_CALLEE_NOT_FOUND');
     }
 
-    const call = await CallRepository.createIfParticipantsAvailable({
+    const callMedia = media === 'audio' ? CallMedia.AUDIO : CallMedia.VIDEO;
+
+    const result = await CallRepository.createIfParticipantsAvailable({
       callerId,
       calleeId,
       callerConnectionId,
-      media: media === 'audio' ? CallMedia.AUDIO : CallMedia.VIDEO,
+      requestId,
+      media: callMedia,
     });
 
-    if (!call) {
+    if (!result) {
       throw new ForbiddenException('CALL_PARTICIPANT_BUSY');
     }
 
-    return call;
+    const { call } = result;
+
+    // A request ID cannot be reused with different parameters.
+    if (
+      call.calleeId !== calleeId ||
+      call.media !== callMedia ||
+      call.callerConnectionId !== callerConnectionId
+    ) {
+      throw new ForbiddenException('CALL_REQUEST_CONFLICT');
+    }
+
+    return result;
   }
 
   async accept(userId: string, connectionId: string, callId: string) {
-    const call = await CallRepository.acceptIfRinging(callId, userId, connectionId);
+    const result = await CallRepository.acceptIfRinging(callId, userId, connectionId);
 
-    if (!call) {
+    if (!result) {
       throw new ForbiddenException('CALL_NOT_ACCEPTABLE');
     }
 
-    return call;
+    return result;
   }
 
   async reject(userId: string, callId: string) {
-    const call = await CallRepository.rejectIfRinging(callId, userId);
+    const result = await CallRepository.rejectIfRinging(callId, userId);
 
-    if (!call) {
+    if (!result) {
       throw new ForbiddenException('CALL_NOT_REJECTABLE');
     }
 
-    return call;
+    return result;
   }
 
   async end(userId: string, callId: string) {
-    const call = await CallRepository.endIfAllowed(callId, userId);
+    const result = await CallRepository.endIfAllowed(callId, userId);
 
-    if (!call) {
+    if (!result) {
       throw new ForbiddenException('CALL_NOT_ENDABLE');
     }
 
-    return call;
+    return result;
   }
 
   async offer(userId: string, connectionId: string, callId: string) {

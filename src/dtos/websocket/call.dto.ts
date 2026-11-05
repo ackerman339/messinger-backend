@@ -4,6 +4,7 @@ import { CallMedia } from '@appTypes';
 export const CallInitSchema = z.object({
   calleeId: z.uuid(),
   media: z.enum(CallMedia),
+  requestId: z.uuid(),
 });
 
 export const CallReferenceSchema = z.object({

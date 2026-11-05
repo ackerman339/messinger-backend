@@ -4,28 +4,44 @@ import { CALL_RING_TIMEOUT_MS } from '@constants';
 import { CallStatus } from '@appTypes';
 import { Call } from '@entities';
 
-type CreateCallData = Pick<Call, 'callerId' | 'calleeId' | 'media' | 'callerConnectionId'>;
+type CreateCallData = Pick<
+  Call,
+  'callerId' | 'calleeId' | 'media' | 'callerConnectionId' | 'requestId'
+>;
 
 export const CallRepository = AppDataSource.getRepository(Call).extend({
   async createIfParticipantsAvailable(data: CreateCallData) {
     return this.manager.transaction('READ COMMITTED', async (manager) => {
       const participantIds = [data.callerId, data.calleeId].sort();
 
-      // Lock call creation for each participant without locking user rows.
       for (const userId of participantIds) {
         await manager.query(
           `SELECT pg_advisory_xact_lock(
-            hashtextextended($1::text, 0)
-          )`,
+          hashtextextended($1::text, 0)
+        )`,
           [`call:user:${userId}`]
         );
       }
 
       const repository = manager.getRepository(Call);
 
+      // Resolve retries before checking participant availability.
+      const existingCall = await repository.findOne({
+        where: {
+          callerId: data.callerId,
+          requestId: data.requestId,
+        },
+      });
+
+      if (existingCall) {
+        return {
+          call: existingCall,
+          created: false,
+        };
+      }
+
       const activeStatuses = [CallStatus.RINGING, CallStatus.ACCEPTED];
 
-      // A participant is busy as either caller or callee.
       const activeCall = await repository.findOne({
         where: [
           {
@@ -52,7 +68,12 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         expiresAt: new Date(Date.now() + CALL_RING_TIMEOUT_MS),
       });
 
-      return repository.save(call);
+      const savedCall = await repository.save(call);
+
+      return {
+        call: savedCall,
+        created: true,
+      };
     });
   },
 
@@ -76,11 +97,29 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         }
       );
 
-      if (result.affected !== 1) {
+      if (result.affected === 1) {
+        const call = await repository.findOneByOrFail({
+          id: callId,
+        });
+
+        return { call, changed: true };
+      }
+
+      // Only the connection that accepted can retry successfully.
+      const call = await repository.findOne({
+        where: {
+          id: callId,
+          calleeId,
+          calleeConnectionId,
+          status: CallStatus.ACCEPTED,
+        },
+      });
+
+      if (!call) {
         return null;
       }
 
-      return repository.findOneByOrFail({ id: callId });
+      return { call, changed: false };
     });
   },
 
@@ -97,14 +136,32 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         {
           status: CallStatus.REJECTED,
           endedAt: new Date(),
+          expiresAt: null,
         }
       );
 
-      if (result.affected !== 1) {
+      if (result.affected === 1) {
+        const call = await repository.findOneByOrFail({
+          id: callId,
+        });
+
+        return { call, changed: true };
+      }
+
+      // A repeated rejection must belong to the same callee.
+      const call = await repository.findOne({
+        where: {
+          id: callId,
+          calleeId,
+          status: CallStatus.REJECTED,
+        },
+      });
+
+      if (!call) {
         return null;
       }
 
-      return repository.findOneByOrFail({ id: callId });
+      return { call, changed: false };
     });
   },
 
@@ -133,14 +190,39 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         {
           status: CallStatus.ENDED,
           endedAt: new Date(),
+          expiresAt: null,
         }
       );
 
-      if (result.affected !== 1) {
+      if (result.affected === 1) {
+        const call = await repository.findOneByOrFail({
+          id: callId,
+        });
+
+        return { call, changed: true };
+      }
+
+      // A participant can acknowledge an already ended call.
+      const call = await repository.findOne({
+        where: [
+          {
+            id: callId,
+            callerId: userId,
+            status: CallStatus.ENDED,
+          },
+          {
+            id: callId,
+            calleeId: userId,
+            status: CallStatus.ENDED,
+          },
+        ],
+      });
+
+      if (!call) {
         return null;
       }
 
-      return repository.findOneByOrFail({ id: callId });
+      return { call, changed: false };
     });
   },
 

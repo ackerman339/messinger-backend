@@ -19,8 +19,9 @@ export async function callAcceptHandler({ connection, message }: WsHandlers<Call
 
   const { callId } = CallReferenceSchema.parse(message.data);
 
-  const call = await callService.accept(userId, connection.id, callId);
+  const { call, changed } = await callService.accept(userId, connection.id, callId);
 
+  // The connection may have closed while persisting acceptance.
   const isConnected = connectionManager
     .getUserConnections(userId)
     .some((candidate) => candidate.id === connection.id);
@@ -30,7 +31,28 @@ export async function callAcceptHandler({ connection, message }: WsHandlers<Call
     return;
   }
 
-  // Notify participants and identify the selected connections.
+  const data = {
+    callId: call.id,
+    callerId: call.callerId,
+    calleeId: call.calleeId,
+    status: call.status,
+    acceptedAt: call.acceptedAt,
+  };
+
+  // Acknowledge the retry without restarting negotiation.
+  if (!changed) {
+    sendMessage(connection, {
+      type: WS_SERVER_EVENTS.CALL_ACCEPT,
+      data: {
+        ...data,
+        isSelectedConnection: true,
+        shouldCreateOffer: false,
+      },
+    });
+
+    return;
+  }
+
   for (const participantId of [call.callerId, call.calleeId]) {
     const isCaller = participantId === call.callerId;
     const selectedConnectionId = isCaller ? call.callerConnectionId : call.calleeConnectionId;
@@ -42,11 +64,7 @@ export async function callAcceptHandler({ connection, message }: WsHandlers<Call
       sendMessage(participantConnection, {
         type: WS_SERVER_EVENTS.CALL_ACCEPT,
         data: {
-          callId: call.id,
-          callerId: call.callerId,
-          calleeId: call.calleeId,
-          status: call.status,
-          acceptedAt: call.acceptedAt,
+          ...data,
           isSelectedConnection,
           shouldCreateOffer: isCaller && isSelectedConnection,
         },

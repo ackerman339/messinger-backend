@@ -18,22 +18,40 @@ export async function callRejectHandler({ connection, message }: WsHandlers<Call
 
   const { callId } = CallReferenceSchema.parse(message.data);
 
-  const call = await callService.reject(userId, callId);
+  const { call, changed } = await callService.reject(userId, callId);
 
-  // Notify the caller and dismiss ringing on the callee's devices.
+  const data = {
+    callId: call.id,
+    callerId: call.callerId,
+    calleeId: call.calleeId,
+    status: call.status,
+    endedAt: call.endedAt,
+  };
+
+  // Acknowledge retries only to the requesting connection.
+  if (!changed) {
+    const senderConnection = connectionManager
+      .getUserConnections(userId)
+      .find((candidate) => candidate.id === connection.id);
+
+    if (senderConnection) {
+      sendMessage(senderConnection, {
+        type: WS_SERVER_EVENTS.CALL_REJECT,
+        data,
+      });
+    }
+
+    return;
+  }
+
+  // Notify participants even if the rejecting connection disconnected.
   for (const participantId of [call.callerId, call.calleeId]) {
     const connections = connectionManager.getUserConnections(participantId);
 
     for (const participantConnection of connections) {
       sendMessage(participantConnection, {
         type: WS_SERVER_EVENTS.CALL_REJECT,
-        data: {
-          callId: call.id,
-          callerId: call.callerId,
-          calleeId: call.calleeId,
-          status: call.status,
-          endedAt: call.endedAt,
-        },
+        data,
       });
     }
   }

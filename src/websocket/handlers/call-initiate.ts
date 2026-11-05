@@ -18,7 +18,9 @@ export async function callInitHandler({ connection, message }: WsHandlers<CallIn
   }
 
   const data = CallInitSchema.parse(message.data);
-  const call = await callService.init(callerId, connection.id, data);
+  const { call, created } = await callService.init(callerId, connection.id, data);
+
+  // Keep the existing post-await connection check here.
 
   const isConnected = connectionManager
     .getUserConnections(callerId)
@@ -41,6 +43,10 @@ export async function callInitHandler({ connection, message }: WsHandlers<CallIn
       expiresAt: call.expiresAt,
     },
   });
+
+  if (!created) {
+    return;
+  }
 
   const connections = connectionManager.getUserConnections(call.calleeId);
 

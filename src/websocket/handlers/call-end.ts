@@ -18,9 +18,33 @@ export async function callEndHandler({ connection, message }: WsHandlers<CallRef
 
   const { callId } = CallReferenceSchema.parse(message.data);
 
-  const call = await callService.end(userId, callId);
+  const { call, changed } = await callService.end(userId, callId);
 
-  // Notify all connected devices of both participants.
+  const data = {
+    callId: call.id,
+    callerId: call.callerId,
+    calleeId: call.calleeId,
+    status: call.status,
+    endedAt: call.endedAt,
+  };
+
+  // Acknowledge retries without repeating the broadcast.
+  if (!changed) {
+    const senderConnection = connectionManager
+      .getUserConnections(userId)
+      .find((candidate) => candidate.id === connection.id);
+
+    if (senderConnection) {
+      sendMessage(senderConnection, {
+        type: WS_SERVER_EVENTS.CALL_END,
+        data,
+      });
+    }
+
+    return;
+  }
+
+  // Notify participants even if the requesting connection disconnected.
   for (const participantId of [call.callerId, call.calleeId]) {
     const connections = connectionManager.getUserConnections(participantId);
 
@@ -28,12 +52,8 @@ export async function callEndHandler({ connection, message }: WsHandlers<CallRef
       sendMessage(participantConnection, {
         type: WS_SERVER_EVENTS.CALL_END,
         data: {
-          callId: call.id,
-          callerId: call.callerId,
-          calleeId: call.calleeId,
+          ...data,
           endedBy: userId,
-          status: call.status,
-          endedAt: call.endedAt,
         },
       });
     }

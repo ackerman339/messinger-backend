@@ -59,4 +59,10 @@ export class Call {
 
   @Column({ type: 'timestamptz', nullable: true })
   expiresAt: Date | null;
+
+  @Column({
+    type: 'uuid',
+    unique: true,
+  })
+  requestId: string;
 }
