@@ -47,4 +47,13 @@ export class Call {
 
   @Column({ type: 'timestamptz', nullable: true })
   endedAt: Date | null;
+
+  @Column({ type: 'uuid' })
+  callerConnectionId: string;
+
+  @Column({
+    type: 'uuid',
+    nullable: true,
+  })
+  calleeConnectionId: string | null;
 }

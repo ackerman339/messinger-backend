@@ -17,7 +17,7 @@ export async function callInitHandler({ connection, message }: WsHandlers<CallIn
   }
 
   const data = CallInitSchema.parse(message.data);
-  const call = await callService.init(callerId, data);
+  const call = await callService.init(callerId, connection.id, data);
 
   // Confirm creation before notifying the callee.
   sendMessage(connection, {

@@ -9,6 +9,9 @@ import {
   GroupMessageDto,
   TypingDto,
   CallInitDto,
+  CallReferenceDto,
+  CallSdpDto,
+  CallIceCandidateDto,
 } from '@dtos';
 
 import {
@@ -20,6 +23,12 @@ import {
   rejectGroupInvitationHandler,
   typingStartHandler,
   callInitHandler,
+  callAcceptHandler,
+  callRejectHandler,
+  callEndHandler,
+  callOfferHandler,
+  callAnswerHandler,
+  callIceCandidateHandler,
 } from './handlers';
 
 /**
@@ -61,6 +70,15 @@ export function registerEventHandlers() {
 
   // Call events
   dispatcher.register<CallInitDto>(WS_CLIENT_EVENTS.CALL_INIT, callInitHandler);
+  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_ACCEPT, callAcceptHandler);
+  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_REJECT, callRejectHandler);
+  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_END, callEndHandler);
+  dispatcher.register<CallSdpDto>(WS_CLIENT_EVENTS.CALL_OFFER, callOfferHandler);
+  dispatcher.register<CallSdpDto>(WS_CLIENT_EVENTS.CALL_ANSWER, callAnswerHandler);
+  dispatcher.register<CallIceCandidateDto>(
+    WS_CLIENT_EVENTS.CALL_ICE_CANDIDATE,
+    callIceCandidateHandler
+  );
 
   return dispatcher;
 }
