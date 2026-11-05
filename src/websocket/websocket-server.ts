@@ -8,6 +8,7 @@ import { connectionManager } from './managers/connection-manager';
 import { parseWsMessage } from './message-parser';
 import { registerEventHandlers } from './register-event-handlers';
 import { presenceOnlineHandler, presenceOfflineHandler } from './handlers/presence-handler';
+import { callDisconnectHandler } from './handlers/call-disconnect';
 import { sendError } from './send-error';
 
 export interface CreateWebSocketServerOptions {
@@ -20,13 +21,37 @@ interface HeartbeatWebSocket extends WebSocket {
 
 const HEARTBEAT_INTERVAL = 30_000;
 
-async function authenticate(connection: Connection, userId: string, sessionId: string) {
+type WsAuthParams = {
+  connection: Connection;
+  socket: WebSocket;
+  userId: string;
+  sessionId: string;
+};
+
+async function authenticate({ connection, socket, userId, sessionId }: WsAuthParams) {
+  // The socket may have closed during authentication.
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
   connectionManager.attachUser(connection, userId);
   connection.sessionId = sessionId;
 
   presenceOnlineHandler(connection);
+
   await offlineSyncService.syncPendingMessages(userId);
+
+  // The socket may have closed while awaiting the previous operation.
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
   await offlineSyncService.syncPendingGroupInvitations(userId);
+
+  // The socket may have closed while awaiting the previous operation.
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
 
   logger.info(`[WS] Authenticated connection (${connection.id}) user=${userId}`);
 }
@@ -76,12 +101,41 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
       `[WS] Connection established (${connection.id}) - Active: ${connectionManager.count()}`
     );
 
+    socket.on('error', (error) => {
+      logger.error(error);
+    });
+
+    socket.on('close', (code, reason) => {
+      const userId = connection.userId;
+
+      connectionManager.unregister(connection.id);
+
+      if (userId) {
+        const remainingConnections = connectionManager.getUserConnections(userId);
+
+        if (remainingConnections.length === 0) {
+          presenceOfflineHandler(connection);
+        }
+
+        callDisconnectHandler(userId, connection.id);
+      }
+
+      logger.info(
+        `[WS] Connection closed (${connection.id}) ` +
+          `code=${code} ` +
+          `reason=${reason.toString()} ` +
+          `Active: ${connectionManager.count()}`
+      );
+    });
+
     try {
       const cookies = await authService.authenticateWsConnection(req);
+
       // Authenticate via cookies, if not request auth via socket.send
       if (cookies?.accessToken) {
         const result = await authService.getWsSession(cookies.accessToken);
-        await authenticate(connection, result.userId, result.sessionId);
+        const { userId, sessionId } = result;
+        await authenticate({ connection, socket, userId, sessionId });
       } else {
         socket.send(
           JSON.stringify({
@@ -101,8 +155,8 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
         // If client responds with token, then authenticate connection
         if (message.type === WS_CLIENT_EVENTS.AUTH_TOKEN_SENT) {
           const result = await authService.getWsSession(message.data.accessToken);
-          await authenticate(connection, result.userId, result.sessionId);
-
+          const { userId, sessionId } = result;
+          await authenticate({ connection, socket, userId, sessionId });
           return;
         }
         await dispatch(connection, message);
@@ -110,28 +164,6 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
         logger.error(error);
         sendError(connection, error);
       }
-    });
-
-    socket.on('close', (code, reason) => {
-      const userId = connection.userId;
-      const userConnections = userId ? connectionManager.getUserConnections(userId) : [];
-      const wasLastConnection = Boolean(userId) && userConnections.length === 1;
-      connectionManager.unregister(connection.id);
-
-      if (wasLastConnection) {
-        presenceOfflineHandler(connection);
-      }
-
-      logger.info(
-        `[WS] Connection closed (${connection.id}) ` +
-          `code=${code} ` +
-          `reason=${reason.toString()} ` +
-          `Active: ${connectionManager.count()}`
-      );
-    });
-
-    socket.on('error', (error) => {
-      logger.error(error);
     });
   });
 

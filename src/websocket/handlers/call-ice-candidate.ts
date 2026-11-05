@@ -7,6 +7,7 @@ import { callService } from '@services';
 import { requireAuthentication } from '../authenticate-guard';
 import { connectionManager } from '../managers/connection-manager';
 import { sendMessage } from '../send-message';
+import { callDisconnectHandler } from './call-disconnect';
 
 export async function callIceCandidateHandler({
   connection,
@@ -23,6 +24,15 @@ export async function callIceCandidateHandler({
   const { callId, candidate } = CallIceCandidateSchema.parse(message.data);
 
   const route = await callService.iceCandidate(userId, connection.id, callId);
+
+  const isSenderConnected = connectionManager
+    .getUserConnections(userId)
+    .some((candidate) => candidate.id === connection.id);
+
+  if (!isSenderConnected) {
+    await callDisconnectHandler(userId, connection.id);
+    return;
+  }
 
   const receiverConnection = connectionManager
     .getUserConnections(route.receiverId)

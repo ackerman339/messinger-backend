@@ -9,6 +9,7 @@ import { callService } from '@services';
 import { requireAuthentication } from '../authenticate-guard';
 import { connectionManager } from '../managers/connection-manager';
 import { sendMessage } from '../send-message';
+import { callDisconnectHandler } from './call-disconnect';
 
 export async function callOfferHandler({ connection, message }: WsHandlers<CallSdpDto>) {
   requireAuthentication(connection);
@@ -22,6 +23,15 @@ export async function callOfferHandler({ connection, message }: WsHandlers<CallS
   const { callId, sdp } = CallSdpSchema.parse(message.data);
 
   const route = await callService.offer(userId, connection.id, callId);
+
+  const isSenderConnected = connectionManager
+    .getUserConnections(userId)
+    .some((candidate) => candidate.id === connection.id);
+
+  if (!isSenderConnected) {
+    await callDisconnectHandler(userId, connection.id);
+    return;
+  }
 
   // Log size measurements without exposing SDP content.
   logger.info('[CALL_OFFER] SDP size', {

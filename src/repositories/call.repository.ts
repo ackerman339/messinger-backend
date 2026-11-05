@@ -235,4 +235,47 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
       ended_at: Date;
     }>;
   },
+
+  async endByDisconnectedConnection(userId: string, connectionId: string) {
+    const result = await this.createQueryBuilder()
+      .update(Call)
+      .set({
+        status: CallStatus.ENDED,
+        endedAt: new Date(),
+        expiresAt: null,
+      })
+      .where(
+        `(
+        caller_id = :userId
+        AND caller_connection_id = :connectionId
+        AND status IN (:...callerStatuses)
+      )`,
+        {
+          userId,
+          connectionId,
+          callerStatuses: [CallStatus.RINGING, CallStatus.ACCEPTED],
+        }
+      )
+      .orWhere(
+        `(
+        callee_id = :userId
+        AND callee_connection_id = :connectionId
+        AND status = :acceptedStatus
+      )`,
+        {
+          userId,
+          connectionId,
+          acceptedStatus: CallStatus.ACCEPTED,
+        }
+      )
+      .returning(['id', 'callerId', 'calleeId', 'endedAt'])
+      .execute();
+
+    return result.raw as Array<{
+      id: string;
+      caller_id: string;
+      callee_id: string;
+      ended_at: Date;
+    }>;
+  },
 });

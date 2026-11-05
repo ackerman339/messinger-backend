@@ -140,6 +140,17 @@ export class CallService {
       endedAt: call.ended_at,
     }));
   }
+
+  async disconnect(userId: string, connectionId: string) {
+    const calls = await CallRepository.endByDisconnectedConnection(userId, connectionId);
+
+    return calls.map((call) => ({
+      callId: call.id,
+      callerId: call.caller_id,
+      calleeId: call.callee_id,
+      endedAt: call.ended_at,
+    }));
+  }
 }
 
 export const callService = new CallService();

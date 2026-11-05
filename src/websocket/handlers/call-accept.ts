@@ -6,6 +6,7 @@ import { callService } from '@services';
 import { requireAuthentication } from '../authenticate-guard';
 import { connectionManager } from '../managers/connection-manager';
 import { sendMessage } from '../send-message';
+import { callDisconnectHandler } from './call-disconnect';
 
 export async function callAcceptHandler({ connection, message }: WsHandlers<CallReferenceDto>) {
   requireAuthentication(connection);
@@ -19,6 +20,15 @@ export async function callAcceptHandler({ connection, message }: WsHandlers<Call
   const { callId } = CallReferenceSchema.parse(message.data);
 
   const call = await callService.accept(userId, connection.id, callId);
+
+  const isConnected = connectionManager
+    .getUserConnections(userId)
+    .some((candidate) => candidate.id === connection.id);
+
+  if (!isConnected) {
+    await callDisconnectHandler(userId, connection.id);
+    return;
+  }
 
   // Notify participants and identify the selected connections.
   for (const participantId of [call.callerId, call.calleeId]) {
