@@ -5,29 +5,57 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 import { User } from './user.entity';
-import { CallStatus, CallMedia } from '@appTypes';
+import { CallMedia, CallStatus } from '@appTypes';
 
 @Entity('calls')
 export class Call {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'caller_id', type: 'uuid' })
+  @Column({
+    type: 'uuid',
+    unique: true,
+  })
+  requestId: string;
+
+  @Column({ type: 'uuid' })
   callerId: string;
 
-  @ManyToOne(() => User, { nullable: false, onDelete: 'RESTRICT' })
+  @ManyToOne(() => User, {
+    nullable: false,
+    onDelete: 'RESTRICT',
+  })
   @JoinColumn({ name: 'caller_id' })
   caller: User;
 
   @Column({ name: 'callee_id', type: 'uuid' })
   calleeId: string;
 
-  @ManyToOne(() => User, { nullable: false, onDelete: 'RESTRICT' })
+  @ManyToOne(() => User, {
+    nullable: false,
+    onDelete: 'RESTRICT',
+  })
   @JoinColumn({ name: 'callee_id' })
   callee: User;
+
+  @Column({ type: 'uuid' })
+  callerConnectionId: string;
+
+  @Column({
+    type: 'uuid',
+    nullable: true,
+  })
+  calleeConnectionId: string | null;
+
+  @Column({
+    type: 'uuid',
+    nullable: true,
+  })
+  currentNegotiationId: string | null;
 
   @Column({ type: 'varchar', length: 50 })
   media: CallMedia;
@@ -39,53 +67,16 @@ export class Call {
   })
   status: CallStatus;
 
-  @CreateDateColumn({ type: 'timestamptz' })
+  @CreateDateColumn({
+    type: 'timestamptz',
+  })
   createdAt: Date;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  acceptedAt: Date | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  endedAt: Date | null;
-
-  @Column({ type: 'uuid' })
-  callerConnectionId: string;
-
   @Column({
-    type: 'uuid',
-    nullable: true,
-  })
-  calleeConnectionId: string | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  expiresAt: Date | null;
-
-  @Column({
-    type: 'uuid',
-    unique: true,
-  })
-  requestId: string;
-
-  @Column({
-    type: 'varchar',
-    length: 64,
-    nullable: true,
-  })
-  offerHash: string | null;
-
-  @Column({
-    type: 'varchar',
-    length: 64,
-    nullable: true,
-  })
-  answerHash: string | null;
-
-  @Column({
-    name: 'connection_expires_at',
     type: 'timestamptz',
     nullable: true,
   })
-  connectionExpiresAt!: Date | null;
+  acceptedAt: Date | null;
 
   @Column({
     type: 'timestamptz',
@@ -104,4 +95,31 @@ export class Call {
     nullable: true,
   })
   connectedAt: Date | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  endedAt: Date | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  expiresAt: Date | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  connectionExpiresAt: Date | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  recoveryExpiresAt: Date | null;
+
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt: Date;
 }

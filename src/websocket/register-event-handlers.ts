@@ -13,6 +13,8 @@ import {
   CallSdpDto,
   CallIceCandidateDto,
   CallSignalAckDto,
+  CallNegotiationInitDto,
+  CallRecoveredDto,
 } from '@dtos';
 
 import {
@@ -33,6 +35,8 @@ import {
   callTimeoutHandler,
   callSignalAckHandler,
   callConnectedHandler,
+  callNegotiationInitHandler,
+  callRecoveredHandler,
 } from './handlers';
 
 /**
@@ -79,13 +83,18 @@ export function registerEventHandlers() {
   dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_END, callEndHandler);
   dispatcher.register<CallSdpDto>(WS_CLIENT_EVENTS.CALL_OFFER, callOfferHandler);
   dispatcher.register<CallSdpDto>(WS_CLIENT_EVENTS.CALL_ANSWER, callAnswerHandler);
+  dispatcher.register<CallSignalAckDto>(WS_CLIENT_EVENTS.CALL_SIGNAL_ACK, callSignalAckHandler);
+  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_TIMEOUT, callTimeoutHandler);
+  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_CONNECTED, callConnectedHandler);
+  dispatcher.register<CallRecoveredDto>(WS_CLIENT_EVENTS.CALL_RECOVERED, callRecoveredHandler);
   dispatcher.register<CallIceCandidateDto>(
     WS_CLIENT_EVENTS.CALL_ICE_CANDIDATE,
     callIceCandidateHandler
   );
-  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_TIMEOUT, callTimeoutHandler);
-  dispatcher.register<CallSignalAckDto>(WS_CLIENT_EVENTS.CALL_SIGNAL_ACK, callSignalAckHandler);
-  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_TIMEOUT, callConnectedHandler);
+  dispatcher.register<CallNegotiationInitDto>(
+    WS_CLIENT_EVENTS.CALL_NEGOTIATION_INIT,
+    callNegotiationInitHandler
+  );
 
   return dispatcher;
 }

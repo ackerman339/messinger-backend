@@ -1,13 +1,11 @@
 import { WsHandlers } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
 import { CallIceCandidateDto, CallIceCandidateSchema } from '@dtos';
-import { ForbiddenException } from '@exceptions';
-import { callService } from '@services';
+import { callNegotiationService } from '@services';
 
+import { resolveCallSignalReceiver } from './foward-call-signal';
 import { requireAuthentication } from '../authenticate-guard';
-import { connectionManager } from '../managers/connection-manager';
 import { sendMessage } from '../send-message';
-import { callDisconnectHandler } from './call-disconnect';
 
 export async function callIceCandidateHandler({
   connection,
@@ -21,32 +19,20 @@ export async function callIceCandidateHandler({
     return;
   }
 
-  const { callId, candidate } = CallIceCandidateSchema.parse(message.data);
+  const data = CallIceCandidateSchema.parse(message.data);
+  const route = await callNegotiationService.iceCandidate(userId, connection.id, data);
+  const receiver = await resolveCallSignalReceiver(connection, userId, route);
 
-  const route = await callService.iceCandidate(userId, connection.id, callId);
-
-  const isSenderConnected = connectionManager
-    .getUserConnections(userId)
-    .some((candidate) => candidate.id === connection.id);
-
-  if (!isSenderConnected) {
-    await callDisconnectHandler(userId, connection.id);
+  if (!receiver) {
     return;
   }
 
-  const receiverConnection = connectionManager
-    .getUserConnections(route.receiverId)
-    .find((connection) => connection.id === route.receiverConnectionId);
-
-  if (!receiverConnection) {
-    throw new ForbiddenException('CALL_RECEIVER_NOT_CONNECTED');
-  }
-
-  sendMessage(receiverConnection, {
+  sendMessage(receiver, {
     type: WS_SERVER_EVENTS.CALL_ICE_CANDIDATE,
     data: {
       callId: route.callId,
-      candidate,
+      negotiationId: route.negotiationId,
+      candidate: data.candidate,
     },
   });
 }

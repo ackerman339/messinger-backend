@@ -3,13 +3,11 @@ import { logger } from '@config/logger';
 import { WsHandlers } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
 import { CallSdpDto, CallSdpSchema } from '@dtos';
-import { ForbiddenException } from '@exceptions';
-import { callService } from '@services';
+import { callNegotiationService } from '@services';
 
+import { resolveCallSignalReceiver } from './foward-call-signal';
 import { requireAuthentication } from '../authenticate-guard';
-import { connectionManager } from '../managers/connection-manager';
 import { sendMessage } from '../send-message';
-import { callDisconnectHandler } from './call-disconnect';
 
 export async function callAnswerHandler({ connection, message }: WsHandlers<CallSdpDto>) {
   requireAuthentication(connection);
@@ -20,41 +18,30 @@ export async function callAnswerHandler({ connection, message }: WsHandlers<Call
     return;
   }
 
-  const { callId, sdp } = CallSdpSchema.parse(message.data);
+  const data = CallSdpSchema.parse(message.data);
 
-  const route = await callService.answer(userId, connection.id, callId, sdp);
+  const route = await callNegotiationService.answer(userId, connection.id, data);
 
-  // The connection may have closed while registering the answer.
-  const isConnected = connectionManager
-    .getUserConnections(userId)
-    .some((candidate) => candidate.id === connection.id);
+  const receiver = await resolveCallSignalReceiver(connection, userId, route);
 
-  if (!isConnected) {
-    await callDisconnectHandler(userId, connection.id);
+  if (!receiver) {
     return;
   }
 
   logger.info(
-    `[CALL_ANSWER] callId=${callId} ` +
-      `sdpLength=${sdp.length} ` +
-      `sdpBytes=${Buffer.byteLength(sdp, 'utf8')}`
+    `[CALL_ANSWER] callId=${route.callId} ` +
+      `negotiationId=${route.negotiationId} ` +
+      `sdpLength=${data.sdp.length} ` +
+      `sdpBytes=${Buffer.byteLength(data.sdp, 'utf8')}`
   );
 
-  const receiverConnection = connectionManager
-    .getUserConnections(route.receiverId)
-    .find((candidate) => candidate.id === route.receiverConnectionId);
-
-  if (!receiverConnection) {
-    throw new ForbiddenException('CALL_RECEIVER_NOT_CONNECTED');
-  }
-
-  // Identical retries are forwarded so a lost delivery can recover.
-  sendMessage(receiverConnection, {
+  sendMessage(receiver, {
     type: WS_SERVER_EVENTS.CALL_ANSWER,
     data: {
       callId: route.callId,
+      negotiationId: route.negotiationId,
       signalId: route.signalId,
-      sdp,
+      sdp: data.sdp,
     },
   });
 }

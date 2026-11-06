@@ -48,6 +48,7 @@ export async function callAcceptHandler({ connection, message }: WsHandlers<Call
         ...data,
         isSelectedConnection: true,
         shouldCreateOffer: false,
+        shouldInitiateNegotiation: false,
       },
     });
 
@@ -67,7 +68,8 @@ export async function callAcceptHandler({ connection, message }: WsHandlers<Call
         data: {
           ...data,
           isSelectedConnection,
-          shouldCreateOffer: isCaller && isSelectedConnection,
+          shouldCreateOffer: false,
+          shouldInitiateNegotiation: isCaller && isSelectedConnection,
         },
       });
     }

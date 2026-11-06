@@ -1,13 +1,12 @@
 import { WsHandlers } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
 import { CallSignalAckDto, CallSignalAckSchema } from '@dtos';
-import { ForbiddenException } from '@exceptions';
-import { callService } from '@services';
+import { callNegotiationService } from '@services';
 
+import { resolveCallSignalReceiver } from './foward-call-signal';
 import { requireAuthentication } from '../authenticate-guard';
 import { connectionManager } from '../managers/connection-manager';
 import { sendMessage } from '../send-message';
-import { callDisconnectHandler } from './call-disconnect';
 
 export async function callSignalAckHandler({ connection, message }: WsHandlers<CallSignalAckDto>) {
   requireAuthentication(connection);
@@ -19,33 +18,52 @@ export async function callSignalAckHandler({ connection, message }: WsHandlers<C
   }
 
   const data = CallSignalAckSchema.parse(message.data);
+  const route = await callNegotiationService.acknowledgeSignal(userId, connection.id, data);
+  const receiver = await resolveCallSignalReceiver(connection, userId, route);
 
-  const route = await callService.acknowledgeSignal(userId, connection.id, data);
-
-  // The connection may have closed while validating the ACK.
-  const isConnected = connectionManager
-    .getUserConnections(userId)
-    .some((candidate) => candidate.id === connection.id);
-
-  if (!isConnected) {
-    await callDisconnectHandler(userId, connection.id);
+  if (!receiver) {
     return;
   }
 
-  const receiverConnection = connectionManager
-    .getUserConnections(route.receiverId)
-    .find((candidate) => candidate.id === route.receiverConnectionId);
-
-  if (!receiverConnection) {
-    throw new ForbiddenException('CALL_RECEIVER_NOT_CONNECTED');
-  }
-
-  sendMessage(receiverConnection, {
+  sendMessage(receiver, {
     type: WS_SERVER_EVENTS.CALL_SIGNAL_ACK,
     data: {
       callId: route.callId,
+      negotiationId: route.negotiationId,
       signalType: route.signalType,
       signalId: route.signalId,
     },
   });
+
+  if (!route.becameCompleted) {
+    return;
+  }
+
+  const participants = [
+    {
+      userId: route.callerId,
+      connectionId: route.callerConnectionId,
+    },
+    {
+      userId: route.calleeId,
+      connectionId: route.calleeConnectionId,
+    },
+  ];
+
+  for (const participant of participants) {
+    const selectedConnection = connectionManager
+      .getUserConnections(participant.userId)
+      .find((candidate) => candidate.id === participant.connectionId);
+
+    if (selectedConnection) {
+      sendMessage(selectedConnection, {
+        type: WS_SERVER_EVENTS.CALL_NEGOTIATION_COMPLETED,
+        data: {
+          callId: route.callId,
+          negotiationId: route.negotiationId,
+          status: route.status,
+        },
+      });
+    }
+  }
 }

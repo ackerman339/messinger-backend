@@ -1,37 +1,48 @@
 import { In, LessThanOrEqual, MoreThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
-import { CALL_RING_TIMEOUT_MS, WS_CLIENT_EVENTS, CALL_CONNECTION_TIMEOUT_MS } from '@constants';
+import { CALL_CONNECTION_TIMEOUT_MS, CALL_RING_TIMEOUT_MS } from '@constants';
 import { CallStatus } from '@appTypes';
-import { CallSignalAckDto } from '@dtos';
 import { Call } from '@entities';
+
+import { CallNegotiationRepository } from './call-negotiation.repository';
 
 type CreateCallData = Pick<
   Call,
-  'callerId' | 'calleeId' | 'media' | 'callerConnectionId' | 'requestId'
+  'callerId' | 'calleeId' | 'callerConnectionId' | 'media' | 'requestId'
 >;
+
+type ClosedCallRow = {
+  id: string;
+  caller_id: string;
+  callee_id: string;
+  ended_at: Date;
+};
 
 export const CallRepository = AppDataSource.getRepository(Call).extend({
   async createIfParticipantsAvailable(data: CreateCallData) {
     return this.manager.transaction('READ COMMITTED', async (manager) => {
+      await manager.query(
+        `SELECT pg_advisory_xact_lock(
+            hashtextextended($1::text, 0)
+          )`,
+        [`call:request:${data.requestId}`]
+      );
+
       const participantIds = [data.callerId, data.calleeId].sort();
 
       for (const userId of participantIds) {
         await manager.query(
           `SELECT pg_advisory_xact_lock(
-          hashtextextended($1::text, 0)
-        )`,
+              hashtextextended($1::text, 0)
+            )`,
           [`call:user:${userId}`]
         );
       }
 
       const repository = manager.getRepository(Call);
 
-      // Resolve retries before checking participant availability.
       const existingCall = await repository.findOne({
-        where: {
-          callerId: data.callerId,
-          requestId: data.requestId,
-        },
+        where: { requestId: data.requestId },
       });
 
       if (existingCall) {
@@ -63,16 +74,20 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
       const call = repository.create({
         ...data,
         calleeConnectionId: null,
+        currentNegotiationId: null,
         status: CallStatus.RINGING,
         acceptedAt: null,
+        callerConnectedAt: null,
+        calleeConnectedAt: null,
+        connectedAt: null,
         endedAt: null,
+        connectionExpiresAt: null,
+        recoveryExpiresAt: null,
         expiresAt: new Date(Date.now() + CALL_RING_TIMEOUT_MS),
       });
 
-      const savedCall = await repository.save(call);
-
       return {
-        call: savedCall,
+        call: await repository.save(call),
         created: true,
       };
     });
@@ -100,14 +115,12 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
       );
 
       if (result.affected === 1) {
-        const call = await repository.findOneByOrFail({
-          id: callId,
-        });
-
-        return { call, changed: true };
+        return {
+          call: await repository.findOneByOrFail({ id: callId }),
+          changed: true,
+        };
       }
 
-      // Retries preserve the original deadline.
       const call = await repository.findOne({
         where: {
           id: callId,
@@ -117,11 +130,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         },
       });
 
-      if (!call) {
-        return null;
-      }
-
-      return { call, changed: false };
+      return call ? { call, changed: false } : null;
     });
   },
 
@@ -139,18 +148,20 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           status: CallStatus.REJECTED,
           endedAt: new Date(),
           expiresAt: null,
+          connectionExpiresAt: null,
+          recoveryExpiresAt: null,
         }
       );
 
       if (result.affected === 1) {
-        const call = await repository.findOneByOrFail({
-          id: callId,
-        });
+        await CallNegotiationRepository.cancelPendingForCall(manager, callId);
 
-        return { call, changed: true };
+        return {
+          call: await repository.findOneByOrFail({ id: callId }),
+          changed: true,
+        };
       }
 
-      // A repeated rejection must belong to the same callee.
       const call = await repository.findOne({
         where: {
           id: callId,
@@ -159,17 +170,14 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         },
       });
 
-      if (!call) {
-        return null;
-      }
-
-      return { call, changed: false };
+      return call ? { call, changed: false } : null;
     });
   },
 
   async endIfAllowed(callId: string, userId: string) {
     return this.manager.transaction(async (manager) => {
       const repository = manager.getRepository(Call);
+
       const establishedStatuses = [CallStatus.ACCEPTED, CallStatus.CONNECTED];
 
       const result = await repository.update(
@@ -195,15 +203,17 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           endedAt: new Date(),
           expiresAt: null,
           connectionExpiresAt: null,
+          recoveryExpiresAt: null,
         }
       );
 
       if (result.affected === 1) {
-        const call = await repository.findOneByOrFail({
-          id: callId,
-        });
+        await CallNegotiationRepository.cancelPendingForCall(manager, callId);
 
-        return { call, changed: true };
+        return {
+          call: await repository.findOneByOrFail({ id: callId }),
+          changed: true,
+        };
       }
 
       const call = await repository.findOne({
@@ -221,125 +231,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         ],
       });
 
-      if (!call) {
-        return null;
-      }
-
-      return { call, changed: false };
-    });
-  },
-
-  async registerOffer(
-    callId: string,
-    callerId: string,
-    callerConnectionId: string,
-    signalId: string
-  ) {
-    return this.manager.transaction(async (manager) => {
-      const repository = manager.getRepository(Call);
-
-      const call = await repository.findOne({
-        where: {
-          id: callId,
-          callerId,
-          callerConnectionId,
-          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
-        },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!call || !call.calleeConnectionId) {
-        return null;
-      }
-
-      if (call.offerHash !== null) {
-        return call.offerHash === signalId ? call : null;
-      }
-
-      call.offerHash = signalId;
-
-      return repository.save(call);
-    });
-  },
-
-  async registerAnswer(
-    callId: string,
-    calleeId: string,
-    calleeConnectionId: string,
-    signalId: string
-  ) {
-    return this.manager.transaction(async (manager) => {
-      const repository = manager.getRepository(Call);
-
-      const call = await repository.findOne({
-        where: {
-          id: callId,
-          calleeId,
-          calleeConnectionId,
-          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
-        },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      // An answer requires a previously registered offer.
-      if (!call || call.offerHash === null) {
-        return null;
-      }
-
-      if (call.answerHash !== null) {
-        return call.answerHash === signalId ? call : null;
-      }
-
-      call.answerHash = signalId;
-
-      return repository.save(call);
-    });
-  },
-
-  async findForSignalAck(
-    userId: string,
-    connectionId: string,
-    { callId, signalType, signalId }: CallSignalAckDto
-  ) {
-    if (signalType === WS_CLIENT_EVENTS.CALL_OFFER) {
-      return this.findOne({
-        where: {
-          id: callId,
-          calleeId: userId,
-          calleeConnectionId: connectionId,
-          offerHash: signalId,
-          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
-        },
-      });
-    }
-
-    return this.findOne({
-      where: {
-        id: callId,
-        callerId: userId,
-        callerConnectionId: connectionId,
-        answerHash: signalId,
-        status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
-      },
-    });
-  },
-
-  async findAcceptedForIceCandidate(callId: string, userId: string, connectionId: string) {
-    return this.findOne({
-      where: [
-        {
-          id: callId,
-          callerId: userId,
-          callerConnectionId: connectionId,
-          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
-        },
-        {
-          id: callId,
-          calleeId: userId,
-          calleeConnectionId: connectionId,
-          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
-        },
-      ],
+      return call ? { call, changed: false } : null;
     });
   },
 
@@ -359,6 +251,8 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         {
           status: CallStatus.MISSED,
           endedAt: now,
+          connectionExpiresAt: null,
+          recoveryExpiresAt: null,
         }
       );
 
@@ -366,76 +260,10 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         return null;
       }
 
+      await CallNegotiationRepository.cancelPendingForCall(manager, callId);
+
       return repository.findOneByOrFail({ id: callId });
     });
-  },
-
-  async expireRinging() {
-    const now = new Date();
-
-    const result = await this.createQueryBuilder()
-      .update(Call)
-      .set({
-        status: CallStatus.MISSED,
-        endedAt: now,
-      })
-      .where('"status" = :status', {
-        status: CallStatus.RINGING,
-      })
-      .andWhere('"expires_at" <= :now', { now })
-      .returning(['id', 'callerId', 'calleeId', 'endedAt'])
-      .execute();
-
-    return result.raw as Array<{
-      id: string;
-      caller_id: string;
-      callee_id: string;
-      ended_at: Date;
-    }>;
-  },
-
-  async endByDisconnectedConnection(userId: string, connectionId: string) {
-    const result = await this.createQueryBuilder()
-      .update(Call)
-      .set({
-        status: CallStatus.ENDED,
-        endedAt: new Date(),
-        expiresAt: null,
-        connectionExpiresAt: null,
-      })
-      .where(
-        `(
-        caller_id = :userId
-        AND caller_connection_id = :connectionId
-        AND status IN (:...callerStatuses)
-      )`,
-        {
-          userId,
-          connectionId,
-          callerStatuses: [CallStatus.RINGING, CallStatus.ACCEPTED, CallStatus.CONNECTED],
-        }
-      )
-      .orWhere(
-        `(
-        callee_id = :userId
-        AND callee_connection_id = :connectionId
-        AND status IN (:...calleeStatuses)
-      )`,
-        {
-          userId,
-          connectionId,
-          calleeStatuses: [CallStatus.ACCEPTED, CallStatus.CONNECTED],
-        }
-      )
-      .returning(['id', 'callerId', 'calleeId', 'endedAt'])
-      .execute();
-
-    return result.raw as Array<{
-      id: string;
-      caller_id: string;
-      callee_id: string;
-      ended_at: Date;
-    }>;
   },
 
   async reportConnected(callId: string, userId: string, connectionId: string) {
@@ -466,12 +294,10 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         return null;
       }
 
-      // An already completed transition is safe to acknowledge again.
       if (call.status === CallStatus.CONNECTED) {
         return { call, becameConnected: false };
       }
 
-      // Evaluate the deadline after acquiring the row lock.
       const now = new Date();
 
       if (!call.connectionExpiresAt || call.connectionExpiresAt.getTime() <= now.getTime()) {
@@ -502,38 +328,151 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         call.connectionExpiresAt = null;
       }
 
-      const savedCall = await repository.save(call);
-
       return {
-        call: savedCall,
+        call: await repository.save(call),
         becameConnected,
       };
     });
   },
 
+  async endByDisconnectedConnection(userId: string, connectionId: string) {
+    return this.manager.transaction(async (manager) => {
+      const result = await manager
+        .createQueryBuilder()
+        .update(Call)
+        .set({
+          status: CallStatus.ENDED,
+          endedAt: new Date(),
+          expiresAt: null,
+          connectionExpiresAt: null,
+          recoveryExpiresAt: null,
+        })
+        .where(
+          `(
+            caller_id = :userId
+            AND caller_connection_id = :connectionId
+            AND status IN (:...callerStatuses)
+          )`,
+          {
+            userId,
+            connectionId,
+            callerStatuses: [CallStatus.RINGING, CallStatus.ACCEPTED, CallStatus.CONNECTED],
+          }
+        )
+        .orWhere(
+          `(
+            callee_id = :userId
+            AND callee_connection_id = :connectionId
+            AND status IN (:...calleeStatuses)
+          )`,
+          {
+            userId,
+            connectionId,
+            calleeStatuses: [CallStatus.ACCEPTED, CallStatus.CONNECTED],
+          }
+        )
+        .returning(['id', 'callerId', 'calleeId', 'endedAt'])
+        .execute();
+
+      const calls = result.raw as ClosedCallRow[];
+
+      for (const call of calls) {
+        await CallNegotiationRepository.cancelPendingForCall(manager, call.id);
+      }
+
+      return calls;
+    });
+  },
+
+  async expireRinging() {
+    return this.manager.transaction(async (manager) => {
+      const now = new Date();
+
+      const result = await manager
+        .createQueryBuilder()
+        .update(Call)
+        .set({
+          status: CallStatus.MISSED,
+          endedAt: now,
+          connectionExpiresAt: null,
+          recoveryExpiresAt: null,
+        })
+        .where('"status" = :status', {
+          status: CallStatus.RINGING,
+        })
+        .andWhere('"expires_at" <= :now', { now })
+        .returning(['id', 'callerId', 'calleeId', 'endedAt'])
+        .execute();
+
+      const calls = result.raw as ClosedCallRow[];
+
+      for (const call of calls) {
+        await CallNegotiationRepository.cancelPendingForCall(manager, call.id);
+      }
+
+      return calls;
+    });
+  },
+
   async expireConnecting() {
-    const now = new Date();
+    return this.manager.transaction(async (manager) => {
+      const now = new Date();
 
-    const result = await this.createQueryBuilder()
-      .update(Call)
-      .set({
-        status: CallStatus.FAILED,
-        endedAt: now,
-        expiresAt: null,
-        connectionExpiresAt: null,
-      })
-      .where('"status" = :status', {
-        status: CallStatus.ACCEPTED,
-      })
-      .andWhere('"connection_expires_at" <= :now', { now })
-      .returning(['id', 'callerId', 'calleeId', 'endedAt'])
-      .execute();
+      const result = await manager
+        .createQueryBuilder()
+        .update(Call)
+        .set({
+          status: CallStatus.FAILED,
+          endedAt: now,
+          expiresAt: null,
+          connectionExpiresAt: null,
+          recoveryExpiresAt: null,
+        })
+        .where('"status" = :status', {
+          status: CallStatus.ACCEPTED,
+        })
+        .andWhere('"connection_expires_at" <= :now', { now })
+        .returning(['id', 'callerId', 'calleeId', 'endedAt'])
+        .execute();
 
-    return result.raw as Array<{
-      id: string;
-      caller_id: string;
-      callee_id: string;
-      ended_at: Date;
-    }>;
+      const calls = result.raw as ClosedCallRow[];
+
+      for (const call of calls) {
+        await CallNegotiationRepository.cancelPendingForCall(manager, call.id);
+      }
+
+      return calls;
+    });
+  },
+
+  async expireRecovery() {
+    return this.manager.transaction(async (manager) => {
+      const now = new Date();
+
+      const result = await manager
+        .createQueryBuilder()
+        .update(Call)
+        .set({
+          status: CallStatus.FAILED,
+          endedAt: now,
+          expiresAt: null,
+          connectionExpiresAt: null,
+          recoveryExpiresAt: null,
+        })
+        .where('"status" = :status', {
+          status: CallStatus.CONNECTED,
+        })
+        .andWhere('"recovery_expires_at" <= :now', { now })
+        .returning(['id', 'callerId', 'calleeId', 'endedAt'])
+        .execute();
+
+      const calls = result.raw as ClosedCallRow[];
+
+      for (const call of calls) {
+        await CallNegotiationRepository.cancelPendingForCall(manager, call.id);
+      }
+
+      return calls;
+    });
   },
 });

@@ -15,3 +15,5 @@ export * from './call-ice-candidate';
 export * from './call-timeout';
 export * from './call-signal-ack';
 export * from './call-connected';
+export * from './call-negotiation-init';
+export * from './call-recovered';
