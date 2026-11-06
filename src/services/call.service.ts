@@ -223,6 +223,10 @@ export class CallService {
         : null,
     };
   }
+
+  async reconcileAfterRestart() {
+    return CallRepository.reconcileAfterRestart();
+  }
 }
 
 export const callService = new CallService();

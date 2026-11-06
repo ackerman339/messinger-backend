@@ -8,6 +8,7 @@ import { AppDataSource } from '@config/database';
 import { env } from '@config/environment';
 import { logger } from '@config/logger';
 import { startJobs } from '@jobs';
+import { reconcileCallsOnStartup } from './startup/reconcile-calls';
 
 const startServer = async () => {
   try {
@@ -17,16 +18,20 @@ const startServer = async () => {
       logger.info('Database connected successfully');
     }
 
-    // Register server events
+    // Single-instance only: the previous process must be stopped.
+    // Retry transient failures before accepting traffic or starting jobs.
+    await reconcileCallsOnStartup();
+
+    // Register server events.
     registerGroupListeners();
 
     // Start cron jobs
     startJobs();
 
-    // HTTP server
+    // Create the HTTP server.
     const server = createServer(app);
 
-    // WS server
+    // Attach the WebSocket server.
     createWebSocketServer({
       server,
     });
@@ -41,4 +46,4 @@ const startServer = async () => {
   }
 };
 
-startServer();
+void startServer();

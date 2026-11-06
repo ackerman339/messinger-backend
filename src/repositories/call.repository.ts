@@ -1,7 +1,7 @@
 import { In, LessThanOrEqual, MoreThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { CALL_CONNECTION_TIMEOUT_MS, CALL_RING_TIMEOUT_MS } from '@constants';
-import { CallStatus } from '@appTypes';
+import { CallStatus, CallNegotiationStatus } from '@appTypes';
 import { Call, CallNegotiation } from '@entities';
 
 import { CallNegotiationRepository } from './call-negotiation.repository';
@@ -517,6 +517,45 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
       return {
         call,
         negotiation,
+      };
+    });
+  },
+
+  async reconcileAfterRestart() {
+    return this.manager.transaction(async (manager) => {
+      const now = new Date();
+
+      const callsResult = await manager.getRepository(Call).update(
+        {
+          status: In([CallStatus.RINGING, CallStatus.ACCEPTED, CallStatus.CONNECTED]),
+        },
+        {
+          status: CallStatus.FAILED,
+          endedAt: now,
+          expiresAt: null,
+          connectionExpiresAt: null,
+          recoveryExpiresAt: null,
+        }
+      );
+
+      // Also clean pending negotiations from previously terminated calls.
+      const negotiationsResult = await manager.getRepository(CallNegotiation).update(
+        {
+          status: In([
+            CallNegotiationStatus.PENDING,
+            CallNegotiationStatus.OFFERED,
+            CallNegotiationStatus.ANSWERED,
+          ]),
+        },
+        {
+          status: CallNegotiationStatus.CANCELLED,
+          endedAt: now,
+        }
+      );
+
+      return {
+        callsClosed: callsResult.affected ?? 0,
+        negotiationsCancelled: negotiationsResult.affected ?? 0,
       };
     });
   },
