@@ -1,5 +1,6 @@
-import { In, LessThanOrEqual, MoreThan } from 'typeorm';
+import { In, LessThanOrEqual, MoreThan, FindOptionsWhere, LessThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
+import { CallHistoryDto } from '@dtos';
 import { CALL_CONNECTION_TIMEOUT_MS, CALL_RING_TIMEOUT_MS } from '@constants';
 import { CallStatus, CallNegotiationStatus } from '@appTypes';
 import { Call, CallNegotiation } from '@entities';
@@ -557,6 +558,78 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         callsClosed: callsResult.affected ?? 0,
         negotiationsCancelled: negotiationsResult.affected ?? 0,
       };
+    });
+  },
+
+  async getHistory(userId: string, { limit, cursor }: CallHistoryDto) {
+    let cursorCall: Call | null = null;
+
+    if (cursor) {
+      cursorCall = await this.findOne({
+        where: [
+          { id: cursor, callerId: userId },
+          { id: cursor, calleeId: userId },
+        ],
+        select: {
+          id: true,
+          createdAt: true,
+        },
+      });
+    }
+
+    const where: FindOptionsWhere<Call>[] = cursorCall
+      ? [
+          {
+            callerId: userId,
+            createdAt: LessThan(cursorCall.createdAt),
+          },
+          {
+            calleeId: userId,
+            createdAt: LessThan(cursorCall.createdAt),
+          },
+          {
+            callerId: userId,
+            createdAt: cursorCall.createdAt,
+            id: LessThan(cursorCall.id),
+          },
+          {
+            calleeId: userId,
+            createdAt: cursorCall.createdAt,
+            id: LessThan(cursorCall.id),
+          },
+        ]
+      : [{ callerId: userId }, { calleeId: userId }];
+
+    return this.find({
+      where,
+      relations: {
+        caller: true,
+        callee: true,
+      },
+      select: {
+        id: true,
+        callerId: true,
+        calleeId: true,
+        media: true,
+        status: true,
+        createdAt: true,
+        acceptedAt: true,
+        connectedAt: true,
+        endedAt: true,
+        caller: {
+          id: true,
+          username: true,
+        },
+        callee: {
+          id: true,
+          username: true,
+        },
+      },
+      order: {
+        createdAt: 'DESC',
+        id: 'DESC',
+      },
+      take: limit + 1,
     });
   },
 });

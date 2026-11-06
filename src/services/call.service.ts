@@ -1,7 +1,9 @@
 import { ForbiddenException, NotFoundException } from '@exceptions';
 import { CallMedia, CallStatus } from '@appTypes';
-import { CallInitDto, CallSyncDto } from '@dtos';
+import { CallInitDto, CallSyncDto, CallHistoryDto } from '@dtos';
 import { CallRepository, UserRepository } from '@repositories';
+import { Call } from '@entities';
+import { paginate } from '@utils';
 
 export class CallService {
   async init(
@@ -226,6 +228,13 @@ export class CallService {
 
   async reconcileAfterRestart() {
     return CallRepository.reconcileAfterRestart();
+  }
+
+  async getHistory(userId: string, dto: CallHistoryDto) {
+    const calls = await CallRepository.getHistory(userId, dto);
+    const { page, nextCursor } = paginate<Call>({ items: calls, limit: dto.limit });
+
+    return { page, nextCursor };
   }
 }
 

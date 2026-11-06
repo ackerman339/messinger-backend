@@ -11,62 +11,50 @@ const CRON_EXPRESSION = '*/5 * * * * *';
 let running = false;
 
 async function expireRingingCalls() {
-  try {
-    const calls = await callService.expireRinging();
+  const calls = await callService.expireRinging();
 
-    for (const call of calls) {
-      notifyCallNoAnswer(call);
-    }
+  for (const call of calls) {
+    notifyCallNoAnswer(call);
+  }
 
-    if (calls.length > 0) {
-      logger.info(`[call-expiration] ${calls.length} calls marked as missed.`);
-    }
-  } catch (error) {
-    logger.error('[call-expiration] Failed to expire ringing calls:', error);
+  if (calls.length > 0) {
+    logger.info(`[call-expiration] ${calls.length} calls marked as missed.`);
   }
 }
 
 async function expireConnectingCalls() {
-  try {
-    const calls = await callService.expireConnecting();
+  const calls = await callService.expireConnecting();
 
-    for (const call of calls) {
-      notifyCallConnectionTimeout(call);
-    }
+  for (const call of calls) {
+    notifyCallConnectionTimeout(call);
+  }
 
-    if (calls.length > 0) {
-      logger.info(`[call-expiration] ${calls.length} calls failed to connect.`);
-    }
-  } catch (error) {
-    logger.error('[call-expiration] Failed to expire connecting calls:', error);
+  if (calls.length > 0) {
+    logger.info(`[call-expiration] ${calls.length} calls failed to connect.`);
   }
 }
 
 async function expireRecoveringCalls() {
-  try {
-    const calls = await callService.expireRecovery();
+  const calls = await callService.expireRecovery();
 
-    for (const call of calls) {
-      notifyCallRecoveryTimeout(call);
-    }
+  for (const call of calls) {
+    notifyCallRecoveryTimeout(call);
+  }
 
-    if (calls.length > 0) {
-      logger.info(`[call-expiration] ${calls.length} calls failed to recover.`);
-    }
-  } catch (error) {
-    logger.error('[call-expiration] Failed to expire recovering calls:', error);
+  if (calls.length > 0) {
+    logger.info(`[call-recover] ${calls.length} calls failed to recover.`);
   }
 }
 
 async function expireNegotiations() {
-  try {
-    const negotiations = await callNegotiationService.expirePending();
+  const negotiations = await callNegotiationService.expirePending();
 
-    for (const negotiation of negotiations) {
-      notifyCallNegotiationEnd(negotiation);
-    }
-  } catch (error) {
-    logger.error('[call-expiration] Failed to expire negotiations:', error);
+  for (const negotiation of negotiations) {
+    notifyCallNegotiationEnd(negotiation);
+  }
+
+  if (negotiations.length > 0) {
+    logger.info(`[negotiation-expiration] ${negotiations.length} negotiations failed to recover.`);
   }
 }
 
