@@ -79,4 +79,29 @@ export class Call {
     nullable: true,
   })
   answerHash: string | null;
+
+  @Column({
+    name: 'connection_expires_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  connectionExpiresAt!: Date | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  callerConnectedAt: Date | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  calleeConnectedAt: Date | null;
+
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  connectedAt: Date | null;
 }

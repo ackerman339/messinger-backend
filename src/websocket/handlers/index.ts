@@ -14,3 +14,4 @@ export * from './call-answer';
 export * from './call-ice-candidate';
 export * from './call-timeout';
 export * from './call-signal-ack';
+export * from './call-connected';

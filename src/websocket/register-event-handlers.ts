@@ -32,6 +32,7 @@ import {
   callIceCandidateHandler,
   callTimeoutHandler,
   callSignalAckHandler,
+  callConnectedHandler,
 } from './handlers';
 
 /**
@@ -84,6 +85,7 @@ export function registerEventHandlers() {
   );
   dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_TIMEOUT, callTimeoutHandler);
   dispatcher.register<CallSignalAckDto>(WS_CLIENT_EVENTS.CALL_SIGNAL_ACK, callSignalAckHandler);
+  dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_TIMEOUT, callConnectedHandler);
 
   return dispatcher;
 }

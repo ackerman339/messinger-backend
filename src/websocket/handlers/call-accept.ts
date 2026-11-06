@@ -37,6 +37,7 @@ export async function callAcceptHandler({ connection, message }: WsHandlers<Call
     calleeId: call.calleeId,
     status: call.status,
     acceptedAt: call.acceptedAt,
+    connectionExpiresAt: call.connectionExpiresAt,
   };
 
   // Acknowledge the retry without restarting negotiation.

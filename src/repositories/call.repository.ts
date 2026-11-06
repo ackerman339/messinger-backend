@@ -1,6 +1,6 @@
 import { In, LessThanOrEqual, MoreThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
-import { CALL_RING_TIMEOUT_MS, WS_CLIENT_EVENTS } from '@constants';
+import { CALL_RING_TIMEOUT_MS, WS_CLIENT_EVENTS, CALL_CONNECTION_TIMEOUT_MS } from '@constants';
 import { CallStatus } from '@appTypes';
 import { CallSignalAckDto } from '@dtos';
 import { Call } from '@entities';
@@ -41,7 +41,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         };
       }
 
-      const activeStatuses = [CallStatus.RINGING, CallStatus.ACCEPTED];
+      const activeStatuses = [CallStatus.RINGING, CallStatus.ACCEPTED, CallStatus.CONNECTED];
 
       const activeCall = await repository.findOne({
         where: [
@@ -95,6 +95,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           calleeConnectionId,
           acceptedAt: now,
           expiresAt: null,
+          connectionExpiresAt: new Date(now.getTime() + CALL_CONNECTION_TIMEOUT_MS),
         }
       );
 
@@ -106,13 +107,13 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         return { call, changed: true };
       }
 
-      // Only the connection that accepted can retry successfully.
+      // Retries preserve the original deadline.
       const call = await repository.findOne({
         where: {
           id: callId,
           calleeId,
           calleeConnectionId,
-          status: CallStatus.ACCEPTED,
+          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
         },
       });
 
@@ -169,6 +170,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
   async endIfAllowed(callId: string, userId: string) {
     return this.manager.transaction(async (manager) => {
       const repository = manager.getRepository(Call);
+      const establishedStatuses = [CallStatus.ACCEPTED, CallStatus.CONNECTED];
 
       const result = await repository.update(
         [
@@ -180,18 +182,19 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           {
             id: callId,
             callerId: userId,
-            status: CallStatus.ACCEPTED,
+            status: In(establishedStatuses),
           },
           {
             id: callId,
             calleeId: userId,
-            status: CallStatus.ACCEPTED,
+            status: In(establishedStatuses),
           },
         ],
         {
           status: CallStatus.ENDED,
           endedAt: new Date(),
           expiresAt: null,
+          connectionExpiresAt: null,
         }
       );
 
@@ -203,7 +206,6 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         return { call, changed: true };
       }
 
-      // A participant can acknowledge an already ended call.
       const call = await repository.findOne({
         where: [
           {
@@ -241,7 +243,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           id: callId,
           callerId,
           callerConnectionId,
-          status: CallStatus.ACCEPTED,
+          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
         },
         lock: { mode: 'pessimistic_write' },
       });
@@ -274,7 +276,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           id: callId,
           calleeId,
           calleeConnectionId,
-          status: CallStatus.ACCEPTED,
+          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
         },
         lock: { mode: 'pessimistic_write' },
       });
@@ -306,7 +308,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           calleeId: userId,
           calleeConnectionId: connectionId,
           offerHash: signalId,
-          status: CallStatus.ACCEPTED,
+          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
         },
       });
     }
@@ -317,7 +319,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         callerId: userId,
         callerConnectionId: connectionId,
         answerHash: signalId,
-        status: CallStatus.ACCEPTED,
+        status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
       },
     });
   },
@@ -329,13 +331,13 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
           id: callId,
           callerId: userId,
           callerConnectionId: connectionId,
-          status: CallStatus.ACCEPTED,
+          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
         },
         {
           id: callId,
           calleeId: userId,
           calleeConnectionId: connectionId,
-          status: CallStatus.ACCEPTED,
+          status: In([CallStatus.ACCEPTED, CallStatus.CONNECTED]),
         },
       ],
     });
@@ -399,6 +401,7 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         status: CallStatus.ENDED,
         endedAt: new Date(),
         expiresAt: null,
+        connectionExpiresAt: null,
       })
       .where(
         `(
@@ -409,21 +412,120 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         {
           userId,
           connectionId,
-          callerStatuses: [CallStatus.RINGING, CallStatus.ACCEPTED],
+          callerStatuses: [CallStatus.RINGING, CallStatus.ACCEPTED, CallStatus.CONNECTED],
         }
       )
       .orWhere(
         `(
         callee_id = :userId
         AND callee_connection_id = :connectionId
-        AND status = :acceptedStatus
+        AND status IN (:...calleeStatuses)
       )`,
         {
           userId,
           connectionId,
-          acceptedStatus: CallStatus.ACCEPTED,
+          calleeStatuses: [CallStatus.ACCEPTED, CallStatus.CONNECTED],
         }
       )
+      .returning(['id', 'callerId', 'calleeId', 'endedAt'])
+      .execute();
+
+    return result.raw as Array<{
+      id: string;
+      caller_id: string;
+      callee_id: string;
+      ended_at: Date;
+    }>;
+  },
+
+  async reportConnected(callId: string, userId: string, connectionId: string) {
+    return this.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Call);
+
+      const statuses = [CallStatus.ACCEPTED, CallStatus.CONNECTED];
+
+      const call = await repository.findOne({
+        where: [
+          {
+            id: callId,
+            callerId: userId,
+            callerConnectionId: connectionId,
+            status: In(statuses),
+          },
+          {
+            id: callId,
+            calleeId: userId,
+            calleeConnectionId: connectionId,
+            status: In(statuses),
+          },
+        ],
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!call) {
+        return null;
+      }
+
+      // An already completed transition is safe to acknowledge again.
+      if (call.status === CallStatus.CONNECTED) {
+        return { call, becameConnected: false };
+      }
+
+      // Evaluate the deadline after acquiring the row lock.
+      const now = new Date();
+
+      if (!call.connectionExpiresAt || call.connectionExpiresAt.getTime() <= now.getTime()) {
+        return null;
+      }
+
+      const isCaller = call.callerId === userId;
+
+      if (isCaller) {
+        if (call.callerConnectedAt) {
+          return { call, becameConnected: false };
+        }
+
+        call.callerConnectedAt = now;
+      } else {
+        if (call.calleeConnectedAt) {
+          return { call, becameConnected: false };
+        }
+
+        call.calleeConnectedAt = now;
+      }
+
+      const becameConnected = Boolean(call.callerConnectedAt && call.calleeConnectedAt);
+
+      if (becameConnected) {
+        call.status = CallStatus.CONNECTED;
+        call.connectedAt = now;
+        call.connectionExpiresAt = null;
+      }
+
+      const savedCall = await repository.save(call);
+
+      return {
+        call: savedCall,
+        becameConnected,
+      };
+    });
+  },
+
+  async expireConnecting() {
+    const now = new Date();
+
+    const result = await this.createQueryBuilder()
+      .update(Call)
+      .set({
+        status: CallStatus.FAILED,
+        endedAt: now,
+        expiresAt: null,
+        connectionExpiresAt: null,
+      })
+      .where('"status" = :status', {
+        status: CallStatus.ACCEPTED,
+      })
+      .andWhere('"connection_expires_at" <= :now', { now })
       .returning(['id', 'callerId', 'calleeId', 'endedAt'])
       .execute();
 

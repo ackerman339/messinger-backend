@@ -195,6 +195,27 @@ export class CallService {
       endedAt: call.ended_at,
     }));
   }
+
+  async connected(userId: string, connectionId: string, callId: string) {
+    const result = await CallRepository.reportConnected(callId, userId, connectionId);
+
+    if (!result) {
+      throw new ForbiddenException('CALL_CONNECTED_NOT_ALLOWED');
+    }
+
+    return result;
+  }
+
+  async expireConnecting() {
+    const calls = await CallRepository.expireConnecting();
+
+    return calls.map((call) => ({
+      callId: call.id,
+      callerId: call.caller_id,
+      calleeId: call.callee_id,
+      endedAt: call.ended_at,
+    }));
+  }
 }
 
 export const callService = new CallService();
