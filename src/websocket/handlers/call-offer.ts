@@ -22,23 +22,23 @@ export async function callOfferHandler({ connection, message }: WsHandlers<CallS
 
   const { callId, sdp } = CallSdpSchema.parse(message.data);
 
-  const route = await callService.offer(userId, connection.id, callId);
+  const route = await callService.offer(userId, connection.id, callId, sdp);
 
-  const isSenderConnected = connectionManager
+  // The connection may have closed while registering the offer.
+  const isConnected = connectionManager
     .getUserConnections(userId)
     .some((candidate) => candidate.id === connection.id);
 
-  if (!isSenderConnected) {
+  if (!isConnected) {
     await callDisconnectHandler(userId, connection.id);
     return;
   }
 
-  // Log size measurements without exposing SDP content.
-  logger.info('[CALL_OFFER] SDP size', {
-    callId,
-    sdpLength: sdp.length,
-    sdpBytes: Buffer.byteLength(sdp, 'utf8'),
-  });
+  logger.info(
+    `[CALL_OFFER] callId=${callId} ` +
+      `sdpLength=${sdp.length} ` +
+      `sdpBytes=${Buffer.byteLength(sdp, 'utf8')}`
+  );
 
   const receiverConnection = connectionManager
     .getUserConnections(route.receiverId)
@@ -48,10 +48,12 @@ export async function callOfferHandler({ connection, message }: WsHandlers<CallS
     throw new ForbiddenException('CALL_RECEIVER_NOT_CONNECTED');
   }
 
+  // Identical retries are forwarded so a lost delivery can recover.
   sendMessage(receiverConnection, {
     type: WS_SERVER_EVENTS.CALL_OFFER,
     data: {
       callId: route.callId,
+      signalId: route.signalId,
       sdp,
     },
   });

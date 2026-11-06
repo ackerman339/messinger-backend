@@ -21,6 +21,7 @@ export const WS_CLIENT_EVENTS = {
   CALL_END: 'CALL_END',
   CALL_ERROR: 'CALL_ERROR',
   CALL_TIMEOUT: 'CALL_TIMEOUT',
+  CALL_SIGNAL_ACK: 'CALL_SIGNAL_ACK',
 } as const;
 
 export const WS_SERVER_EVENTS = {
@@ -50,6 +51,7 @@ export const WS_SERVER_EVENTS = {
   CALL_ICE_CANDIDATE: 'CALL_ICE_CANDIDATE',
   CALL_END: 'CALL_END',
   CALL_ERROR: 'CALL_ERROR',
+  CALL_SIGNAL_ACK: 'CALL_SIGNAL_ACK',
 } as const;
 
 export type WsClientEvent = (typeof WS_CLIENT_EVENTS)[keyof typeof WS_CLIENT_EVENTS];

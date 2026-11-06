@@ -1,7 +1,8 @@
 import { In, LessThanOrEqual, MoreThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
-import { CALL_RING_TIMEOUT_MS } from '@constants';
+import { CALL_RING_TIMEOUT_MS, WS_CLIENT_EVENTS } from '@constants';
 import { CallStatus } from '@appTypes';
+import { CallSignalAckDto } from '@dtos';
 import { Call } from '@entities';
 
 type CreateCallData = Pick<
@@ -226,23 +227,96 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
     });
   },
 
-  async findAcceptedForOffer(callId: string, callerId: string, callerConnectionId: string) {
-    return this.findOne({
-      where: {
-        id: callId,
-        callerId,
-        callerConnectionId,
-        status: CallStatus.ACCEPTED,
-      },
+  async registerOffer(
+    callId: string,
+    callerId: string,
+    callerConnectionId: string,
+    signalId: string
+  ) {
+    return this.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Call);
+
+      const call = await repository.findOne({
+        where: {
+          id: callId,
+          callerId,
+          callerConnectionId,
+          status: CallStatus.ACCEPTED,
+        },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!call || !call.calleeConnectionId) {
+        return null;
+      }
+
+      if (call.offerHash !== null) {
+        return call.offerHash === signalId ? call : null;
+      }
+
+      call.offerHash = signalId;
+
+      return repository.save(call);
     });
   },
 
-  async findAcceptedForAnswer(callId: string, calleeId: string, calleeConnectionId: string) {
+  async registerAnswer(
+    callId: string,
+    calleeId: string,
+    calleeConnectionId: string,
+    signalId: string
+  ) {
+    return this.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Call);
+
+      const call = await repository.findOne({
+        where: {
+          id: callId,
+          calleeId,
+          calleeConnectionId,
+          status: CallStatus.ACCEPTED,
+        },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      // An answer requires a previously registered offer.
+      if (!call || call.offerHash === null) {
+        return null;
+      }
+
+      if (call.answerHash !== null) {
+        return call.answerHash === signalId ? call : null;
+      }
+
+      call.answerHash = signalId;
+
+      return repository.save(call);
+    });
+  },
+
+  async findForSignalAck(
+    userId: string,
+    connectionId: string,
+    { callId, signalType, signalId }: CallSignalAckDto
+  ) {
+    if (signalType === WS_CLIENT_EVENTS.CALL_OFFER) {
+      return this.findOne({
+        where: {
+          id: callId,
+          calleeId: userId,
+          calleeConnectionId: connectionId,
+          offerHash: signalId,
+          status: CallStatus.ACCEPTED,
+        },
+      });
+    }
+
     return this.findOne({
       where: {
         id: callId,
-        calleeId,
-        calleeConnectionId,
+        callerId: userId,
+        callerConnectionId: connectionId,
+        answerHash: signalId,
         status: CallStatus.ACCEPTED,
       },
     });

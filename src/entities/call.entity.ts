@@ -65,4 +65,18 @@ export class Call {
     unique: true,
   })
   requestId: string;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
+  offerHash: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
+  answerHash: string | null;
 }

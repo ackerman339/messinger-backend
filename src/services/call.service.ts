@@ -1,7 +1,9 @@
 import { ForbiddenException, NotFoundException } from '@exceptions';
 import { CallMedia, CallStatus } from '@appTypes';
-import { CallInitDto } from '@dtos';
+import { WS_CLIENT_EVENTS } from '@constants';
+import { CallInitDto, CallSignalAckDto } from '@dtos';
 import { CallRepository, UserRepository } from '@repositories';
+import { createHash } from 'node:crypto';
 
 export class CallService {
   async init(
@@ -80,8 +82,10 @@ export class CallService {
     return result;
   }
 
-  async offer(userId: string, connectionId: string, callId: string) {
-    const call = await CallRepository.findAcceptedForOffer(callId, userId, connectionId);
+  async offer(userId: string, connectionId: string, callId: string, sdp: string) {
+    const signalId = createHash('sha256').update(sdp, 'utf8').digest('hex');
+
+    const call = await CallRepository.registerOffer(callId, userId, connectionId, signalId);
 
     if (!call || !call.calleeConnectionId) {
       throw new ForbiddenException('CALL_OFFER_NOT_ALLOWED');
@@ -91,11 +95,14 @@ export class CallService {
       callId: call.id,
       receiverId: call.calleeId,
       receiverConnectionId: call.calleeConnectionId,
+      signalId,
     };
   }
 
-  async answer(userId: string, connectionId: string, callId: string) {
-    const call = await CallRepository.findAcceptedForAnswer(callId, userId, connectionId);
+  async answer(userId: string, connectionId: string, callId: string, sdp: string) {
+    const signalId = createHash('sha256').update(sdp, 'utf8').digest('hex');
+
+    const call = await CallRepository.registerAnswer(callId, userId, connectionId, signalId);
 
     if (!call) {
       throw new ForbiddenException('CALL_ANSWER_NOT_ALLOWED');
@@ -105,6 +112,25 @@ export class CallService {
       callId: call.id,
       receiverId: call.callerId,
       receiverConnectionId: call.callerConnectionId,
+      signalId,
+    };
+  }
+
+  async acknowledgeSignal(userId: string, connectionId: string, data: CallSignalAckDto) {
+    const call = await CallRepository.findForSignalAck(userId, connectionId, data);
+
+    if (!call || !call.calleeConnectionId) {
+      throw new ForbiddenException('CALL_SIGNAL_ACK_NOT_ALLOWED');
+    }
+
+    const acknowledgesOffer = data.signalType === WS_CLIENT_EVENTS.CALL_OFFER;
+
+    return {
+      callId: call.id,
+      signalType: data.signalType,
+      signalId: data.signalId,
+      receiverId: acknowledgesOffer ? call.callerId : call.calleeId,
+      receiverConnectionId: acknowledgesOffer ? call.callerConnectionId : call.calleeConnectionId,
     };
   }
 
