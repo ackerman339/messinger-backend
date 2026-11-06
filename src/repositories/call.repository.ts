@@ -2,7 +2,7 @@ import { In, LessThanOrEqual, MoreThan } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { CALL_CONNECTION_TIMEOUT_MS, CALL_RING_TIMEOUT_MS } from '@constants';
 import { CallStatus } from '@appTypes';
-import { Call } from '@entities';
+import { Call, CallNegotiation } from '@entities';
 
 import { CallNegotiationRepository } from './call-negotiation.repository';
 
@@ -473,6 +473,51 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
       }
 
       return calls;
+    });
+  },
+
+  async findStateForParticipant(
+    userId: string,
+    selector: {
+      callId?: string;
+      requestId?: string;
+    }
+  ) {
+    return this.manager.transaction('REPEATABLE READ', async (manager) => {
+      const repository = manager.getRepository(Call);
+
+      const lookup = selector.callId ? { id: selector.callId } : { requestId: selector.requestId! };
+
+      const call = await repository.findOne({
+        where: [
+          {
+            ...lookup,
+            callerId: userId,
+          },
+          {
+            ...lookup,
+            calleeId: userId,
+          },
+        ],
+      });
+
+      if (!call) {
+        return null;
+      }
+
+      const negotiation = call.currentNegotiationId
+        ? await manager.getRepository(CallNegotiation).findOne({
+            where: {
+              id: call.currentNegotiationId,
+              callId: call.id,
+            },
+          })
+        : null;
+
+      return {
+        call,
+        negotiation,
+      };
     });
   },
 });

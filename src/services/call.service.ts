@@ -1,6 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@exceptions';
 import { CallMedia, CallStatus } from '@appTypes';
-import { CallInitDto } from '@dtos';
+import { CallInitDto, CallSyncDto } from '@dtos';
 import { CallRepository, UserRepository } from '@repositories';
 
 export class CallService {
@@ -155,6 +155,73 @@ export class CallService {
       calleeId: call.callee_id,
       endedAt: call.ended_at,
     }));
+  }
+
+  async sync(userId: string, connectionId: string, { callId, requestId }: CallSyncDto) {
+    const result = await CallRepository.findStateForParticipant(userId, {
+      callId,
+      requestId,
+    });
+
+    if (!result) {
+      throw new NotFoundException('CALL_NOT_FOUND');
+    }
+
+    const { call, negotiation } = result;
+    const isCaller = call.callerId === userId;
+    const selectedConnectionId = isCaller ? call.callerConnectionId : call.calleeConnectionId;
+    const isSelectedConnection = selectedConnectionId === connectionId;
+
+    const isTerminal = [
+      CallStatus.REJECTED,
+      CallStatus.MISSED,
+      CallStatus.ENDED,
+      CallStatus.FAILED,
+    ].includes(call.status);
+
+    return {
+      call: {
+        callId: call.id,
+        requestId: call.requestId,
+        callerId: call.callerId,
+        calleeId: call.calleeId,
+        media: call.media,
+        status: call.status,
+        role: isCaller ? 'CALLER' : 'CALLEE',
+        isSelectedConnection,
+        isTerminal,
+        createdAt: call.createdAt,
+        acceptedAt: call.acceptedAt,
+        connectedAt: call.connectedAt,
+        callerConnectedAt: call.callerConnectedAt,
+        calleeConnectedAt: call.calleeConnectedAt,
+        endedAt: call.endedAt,
+        expiresAt: call.expiresAt,
+        connectionExpiresAt: call.connectionExpiresAt,
+        recoveryExpiresAt: call.recoveryExpiresAt,
+        currentNegotiationId: call.currentNegotiationId,
+      },
+      negotiation: negotiation
+        ? {
+            negotiationId: negotiation.id,
+            requestId: negotiation.requestId,
+            type: negotiation.type,
+            status: negotiation.status,
+            offererId: negotiation.offererId,
+            isOfferer: negotiation.offererId === userId,
+            offerSignalId: negotiation.offerHash,
+            answerSignalId: negotiation.answerHash,
+            offerAcknowledgedAt: negotiation.offerAcknowledgedAt,
+            answerAcknowledgedAt: negotiation.answerAcknowledgedAt,
+            callerRecoveredAt: negotiation.callerRecoveredAt,
+            calleeRecoveredAt: negotiation.calleeRecoveredAt,
+            recoveredAt: negotiation.recoveredAt,
+            createdAt: negotiation.createdAt,
+            expiresAt: negotiation.expiresAt,
+            endedAt: negotiation.endedAt,
+          }
+        : null,
+    };
   }
 }
 

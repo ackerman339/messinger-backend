@@ -3,7 +3,7 @@ import { CallReferenceDto, CallReferenceSchema } from '@dtos';
 import { callService } from '@services';
 
 import { requireAuthentication } from '../authenticate-guard';
-import { notifyCallNoAnswer } from './notify-no-answer-call';
+import { notifyCallNoAnswer } from './notify-call-no-answer';
 
 export async function callTimeoutHandler({ connection, message }: WsHandlers<CallReferenceDto>) {
   requireAuthentication(connection);

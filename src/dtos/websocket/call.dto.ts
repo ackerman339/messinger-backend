@@ -56,6 +56,18 @@ export const CallRecoveredSchema = z.object({
   negotiationId: z.uuid(),
 });
 
+export const CallSyncSchema = z
+  .object({
+    syncId: z.uuid(),
+    callId: z.uuid().optional(),
+    requestId: z.uuid().optional(),
+  })
+  .refine(({ callId, requestId }) => Number(Boolean(callId)) + Number(Boolean(requestId)) === 1, {
+    message: 'You must provide either callId or requestId, but not both.',
+  });
+
+export type CallSyncDto = z.infer<typeof CallSyncSchema>;
+
 export type CallInitDto = z.infer<typeof CallInitSchema>;
 export type CallReferenceDto = z.infer<typeof CallReferenceSchema>;
 export type CallSdpDto = z.infer<typeof CallSdpSchema>;

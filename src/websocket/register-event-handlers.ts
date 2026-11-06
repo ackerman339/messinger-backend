@@ -15,6 +15,7 @@ import {
   CallSignalAckDto,
   CallNegotiationInitDto,
   CallRecoveredDto,
+  CallSyncDto,
 } from '@dtos';
 
 import {
@@ -37,6 +38,7 @@ import {
   callConnectedHandler,
   callNegotiationInitHandler,
   callRecoveredHandler,
+  callSyncHandler,
 } from './handlers';
 
 /**
@@ -87,6 +89,7 @@ export function registerEventHandlers() {
   dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_TIMEOUT, callTimeoutHandler);
   dispatcher.register<CallReferenceDto>(WS_CLIENT_EVENTS.CALL_CONNECTED, callConnectedHandler);
   dispatcher.register<CallRecoveredDto>(WS_CLIENT_EVENTS.CALL_RECOVERED, callRecoveredHandler);
+  dispatcher.register<CallSyncDto>(WS_CLIENT_EVENTS.CALL_SYNC, callSyncHandler);
   dispatcher.register<CallIceCandidateDto>(
     WS_CLIENT_EVENTS.CALL_ICE_CANDIDATE,
     callIceCandidateHandler

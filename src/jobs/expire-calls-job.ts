@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { logger } from '@config/logger';
 import { callService, callNegotiationService } from '@services';
-import { notifyCallNoAnswer } from '@websocket/handlers/notify-no-answer-call';
+import { notifyCallNoAnswer } from '@websocket/handlers/notify-call-no-answer';
 import { notifyCallConnectionTimeout } from '@websocket/handlers/notify-call-connection-timeout';
 import { notifyCallNegotiationEnd } from '@websocket/handlers/notify-call-negotiation-end';
 import { notifyCallRecoveryTimeout } from '@websocket/handlers/notify-call-recovery-timeout';
