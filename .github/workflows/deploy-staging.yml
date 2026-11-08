@@ -71,4 +71,4 @@ jobs:
 
             docker compose -f docker-compose.staging.yml run --rm api pnpm cli seed
 
-            docker compose -f docker-compose.staging.yml up -d api
+             docker compose -f docker-compose.staging.yml up -d api coturn

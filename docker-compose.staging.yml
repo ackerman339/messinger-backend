@@ -1,10 +1,6 @@
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: staging
-
+    image: ghcr.io/${OWNER:?OWNER is required}/${REPOSITORY:?REPOSITORY is required}:${IMAGE_TAG:?IMAGE_TAG is required}
     container_name: ${PROJECT_NAME:?PROJECT_NAME is not set in .env file}
 
     ports:
