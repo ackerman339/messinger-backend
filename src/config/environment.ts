@@ -129,6 +129,12 @@ const envSchema = z.object({
     .regex(/[a-z]/, 'Must contain at least one lowercase letter')
     .regex(/[0-9]/, 'Must contain at least one number')
     .regex(/[!@#$%^&*]/, 'Must contain at least one special character'),
+
+  // Coturn config
+  TURN_HOST: z.string().min(1),
+  TURN_PORT: z.coerce.number().int().min(1).max(65535).default(3478),
+  TURN_TTL: z.coerce.number().int().positive().default(3600),
+  TURN_SECRET: z.string().min(1),
 });
 
 export type Env = z.infer<typeof envSchema>;

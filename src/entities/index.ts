@@ -9,3 +9,5 @@ export * from './group-invitation.entity';
 export * from './message-attrachment.entity';
 export * from './pending-upload.entity';
 export * from './push-subscription.entity';
+export * from './call.entity';
+export * from './call-negotiation.entity';

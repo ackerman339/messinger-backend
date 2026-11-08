@@ -4,3 +4,5 @@ export * from './storage.controller';
 export * from './user.controler';
 export * from './admin.controller';
 export * from './push-subscription.controller';
+export * from './turn.controller';
+export * from './calls-controller';

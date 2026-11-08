@@ -6,3 +6,4 @@ export * from './storage.dto';
 export * from './admin.dto';
 export * from './push-subscription';
 export * from './push-notification';
+export * from './call-history.dto';

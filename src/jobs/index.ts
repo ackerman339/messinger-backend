@@ -1,6 +1,8 @@
 import { logger } from '@config/logger';
 import type { ScheduledTask } from 'node-cron';
+
 import { deleteMessagesJob } from './delete-messages.job';
+import { expireCallsJob } from './expire-calls-job';
 
 type Job = {
   name: string;
@@ -9,8 +11,12 @@ type Job = {
 
 const jobs: Job[] = [
   {
-    name: 'Delete message job',
+    name: 'Delete messages job',
     instance: deleteMessagesJob,
+  },
+  {
+    name: 'Expire calls job',
+    instance: expireCallsJob,
   },
 ];
 
