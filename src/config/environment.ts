@@ -135,6 +135,7 @@ const envSchema = z.object({
   TURN_PORT: z.coerce.number().int().min(1).max(65535).default(3478),
   TURN_TTL: z.coerce.number().int().positive().default(3600),
   TURN_SECRET: z.string().min(1),
+  TURN_PUBLIC_IP: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
