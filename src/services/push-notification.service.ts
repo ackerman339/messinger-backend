@@ -4,7 +4,11 @@ import { pushSubscriptionService } from './push-subscription.service';
 import { webPushService } from './web-push.service';
 
 class PushNotificationService {
-  async sendToUser(userId: string, payload: PushNotificationPayload) {
+  async sendToUser(
+    userId: string,
+    payload: PushNotificationPayload,
+    options?: webPush.RequestOptions
+  ) {
     const subscriptions = await pushSubscriptionService.findByUserId(userId);
 
     await Promise.all(
@@ -18,7 +22,7 @@ class PushNotificationService {
         };
 
         try {
-          await webPushService.send(webSubscription, payload);
+          await webPushService.send(webSubscription, payload, options);
         } catch (error) {
           if (
             error instanceof webPush.WebPushError &&
