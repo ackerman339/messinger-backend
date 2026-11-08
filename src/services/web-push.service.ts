@@ -7,8 +7,12 @@ class WebPushService {
     webPush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   }
 
-  async send(subscription: webPush.PushSubscription, payload: PushNotificationPayload) {
-    return webPush.sendNotification(subscription, JSON.stringify(payload));
+  async send(
+    subscription: webPush.PushSubscription,
+    payload: PushNotificationPayload,
+    options?: webPush.RequestOptions
+  ) {
+    return webPush.sendNotification(subscription, JSON.stringify(payload), options);
   }
 }
 

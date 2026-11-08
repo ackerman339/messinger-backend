@@ -1,7 +1,8 @@
 import { WsHandlers } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
 import { CallInitDto, CallInitSchema } from '@dtos';
-import { callService } from '@services';
+import { callService, pushNotificationService } from '@services';
+import { logger } from '@config/logger';
 
 import { requireAuthentication } from '../authenticate-guard';
 import { connectionManager } from '../managers/connection-manager';
@@ -61,5 +62,38 @@ export async function callInitHandler({ connection, message }: WsHandlers<CallIn
         expiresAt: call.expiresAt,
       },
     });
+  }
+
+  // Connected clients already show a local call notification.
+  if (connections.length === 0) {
+    void pushNotificationService
+      .sendToUser(
+        call.calleeId,
+        {
+          title: 'Llamada entrante',
+          body:
+            call.media === 'video'
+              ? 'Tienes una videollamada entrante.'
+              : 'Tienes una llamada de voz entrante.',
+          icon: '/pwa-192x192.png',
+          data: {
+            type: 'call-incoming',
+            callId: call.id,
+            callerId: call.callerId,
+            media: call.media,
+            expiresAt: call.expiresAt?.toISOString() ?? null,
+          },
+        },
+        {
+          TTL: call.expiresAt
+            ? Math.max(0, Math.ceil((call.expiresAt.getTime() - Date.now()) / 1000))
+            : 0,
+          urgency: 'high',
+          topic: call.id.replaceAll('-', ''),
+        }
+      )
+      .catch(() => {
+        logger.warn('[call-push] Failed to send incoming call notification.', { callId: call.id });
+      });
   }
 }
