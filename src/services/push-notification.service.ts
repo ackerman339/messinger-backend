@@ -11,32 +11,32 @@ class PushNotificationService {
   ) {
     const subscriptions = await pushSubscriptionService.findByUserId(userId);
 
-    await Promise.all(
-      subscriptions.map(async (subscription) => {
-        const webSubscription: webPush.PushSubscription = {
-          endpoint: subscription.endpoint!,
-          keys: {
-            p256dh: subscription.p256dh!,
-            auth: subscription.auth!,
-          },
-        };
+    try {
+      await Promise.all(
+        subscriptions.map(async (subscription) => {
+          const webSubscription: webPush.PushSubscription = {
+            endpoint: subscription.endpoint!,
+            keys: {
+              p256dh: subscription.p256dh!,
+              auth: subscription.auth!,
+            },
+          };
 
-        try {
-          await webPushService.send(webSubscription, payload, options);
-        } catch (error) {
-          if (
-            error instanceof webPush.WebPushError &&
-            (error.statusCode === 404 || error.statusCode === 410)
-          ) {
-            await pushSubscriptionService.removeInvalidSubscription(subscription.endpoint!);
-
-            return;
-          }
-
-          throw error;
-        }
-      })
-    );
+          return webPushService.send(webSubscription, payload, options);
+        })
+      );
+    } catch (error) {
+      if (
+        error instanceof webPush.WebPushError &&
+        (error.statusCode === 404 || error.statusCode === 410)
+      ) {
+        await Promise.all(
+          subscriptions.map((subscription) => {
+            return pushSubscriptionService.removeInvalidSubscription(subscription.endpoint!);
+          })
+        );
+      }
+    }
   }
 }
 
