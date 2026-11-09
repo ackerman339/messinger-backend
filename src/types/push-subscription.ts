@@ -6,6 +6,7 @@ export enum PushPlatform {
 
 export enum PushProvider {
   WEB_PUSH = 'WEB_PUSH',
+  EXPO = 'EXPO',
   FCM = 'FCM',
   APNS = 'APNS',
 }

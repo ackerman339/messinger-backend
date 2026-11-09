@@ -1,5 +1,5 @@
 import { AppDataSource } from '@config/database';
-import { WebPushSubscriptionDto } from '@dtos';
+import { MobilePushSubscriptionDto, WebPushSubscriptionDto } from '@dtos';
 import { PushSubscriptionRepository } from '@repositories';
 
 class PushSubscriptionService {
@@ -26,6 +26,18 @@ class PushSubscriptionService {
 
   async removeInvalidSubscription(endpoint: string) {
     await PushSubscriptionRepository.deleteByEndpoint(endpoint);
+  }
+
+  async subscribeMobile(userId: string, dto: MobilePushSubscriptionDto) {
+    await PushSubscriptionRepository.subscribeMobile(userId, dto);
+  }
+
+  async unsubscribeMobile(userId: string, token: string) {
+    await PushSubscriptionRepository.deleteMobile(userId, token);
+  }
+
+  async removeInvalidMobileSubscription(id: string, token: string) {
+    await PushSubscriptionRepository.removeInvalidMobile(id, token);
   }
 }
 

@@ -1,7 +1,10 @@
 import webPush from 'web-push';
+import { PushProvider } from '@appTypes';
+import { logger } from '@config/logger';
 import { PushNotificationPayload } from '@dtos';
 import { pushSubscriptionService } from './push-subscription.service';
 import { webPushService } from './web-push.service';
+import { mobilePushService, MobilePushError } from './mobile-push.service';
 
 class PushNotificationService {
   async sendToUser(
@@ -9,33 +12,67 @@ class PushNotificationService {
     payload: PushNotificationPayload,
     options?: webPush.RequestOptions
   ) {
-    const subscriptions = await pushSubscriptionService.findByUserId(userId);
-
+    // Callers use fire-and-forget: capture lookup, transport and cleanup errors here.
     try {
-      await Promise.all(
-        subscriptions.map(async (subscription) => {
-          const webSubscription: webPush.PushSubscription = {
-            endpoint: subscription.endpoint!,
-            keys: {
-              p256dh: subscription.p256dh!,
-              auth: subscription.auth!,
-            },
-          };
+      const subscriptions = await pushSubscriptionService.findByUserId(userId);
 
-          return webPushService.send(webSubscription, payload, options);
-        })
-      );
-    } catch (error) {
-      if (
-        error instanceof webPush.WebPushError &&
-        (error.statusCode === 404 || error.statusCode === 410)
-      ) {
-        await Promise.all(
-          subscriptions.map((subscription) => {
-            return pushSubscriptionService.removeInvalidSubscription(subscription.endpoint!);
-          })
-        );
-      }
+      const promises = subscriptions.map((subscription) => {
+        let notification: Promise<unknown>;
+        if (subscription.provider === PushProvider.EXPO && subscription.token) {
+          notification = mobilePushService.send(subscription.token, payload, {
+            ttl: options?.TTL,
+            priority:
+              options?.urgency === 'low' || options?.urgency === 'very-low' ? 'normal' : 'high',
+          });
+        } else if (
+          subscription.provider === PushProvider.WEB_PUSH &&
+          subscription.endpoint &&
+          subscription.p256dh &&
+          subscription.auth
+        ) {
+          notification = webPushService.send(
+            {
+              endpoint: subscription.endpoint,
+              keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+            },
+            payload,
+            options
+          );
+        } else {
+          return Promise.resolve();
+        }
+
+        return notification.catch(async (error: unknown) => {
+          if (
+            subscription.provider === PushProvider.EXPO &&
+            subscription.token &&
+            error instanceof MobilePushError &&
+            error.code === 'DeviceNotRegistered'
+          ) {
+            await pushSubscriptionService.removeInvalidMobileSubscription(
+              subscription.id,
+              subscription.token
+            );
+          } else if (
+            subscription.provider === PushProvider.WEB_PUSH &&
+            subscription.endpoint &&
+            error instanceof webPush.WebPushError &&
+            (error.statusCode === 404 || error.statusCode === 410)
+          ) {
+            await pushSubscriptionService.removeInvalidSubscription(subscription.endpoint);
+          }
+          // Never log provider errors verbatim: they may contain tokens or payloads.
+          logger.warn('[push] Notification failed', {
+            subscriptionId: subscription.id,
+            provider: subscription.provider,
+            code: error instanceof MobilePushError ? error.code : undefined,
+          });
+        });
+      });
+
+      await Promise.all(promises);
+    } catch {
+      logger.error('[push] Failed to send notifications', { userId });
     }
   }
 }

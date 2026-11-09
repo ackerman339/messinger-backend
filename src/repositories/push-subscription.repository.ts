@@ -1,7 +1,7 @@
 import { EntityManager } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { PushPlatform, PushProvider } from '@appTypes';
-import { WebPushSubscriptionDto } from '@dtos';
+import { MobilePushSubscriptionDto, WebPushSubscriptionDto } from '@dtos';
 import { PushSubscription } from '@entities';
 
 export const PushSubscriptionRepository = AppDataSource.getRepository(PushSubscription).extend({
@@ -18,6 +18,37 @@ export const PushSubscriptionRepository = AppDataSource.getRepository(PushSubscr
     });
 
     return repository.save(subscription);
+  },
+
+  async subscribeMobile(userId: string, dto: MobilePushSubscriptionDto) {
+    await AppDataSource.transaction('SERIALIZABLE', async (manager) => {
+      const repository = manager.getRepository(PushSubscription);
+      const existing = await repository.findOne({
+        where: { provider: PushProvider.EXPO, token: dto.token },
+      });
+
+      // Reuse the registration when this device signs in with another account.
+      const subscription = repository.create({
+        ...existing,
+        userId,
+        token: dto.token,
+        platform: dto.platform,
+        provider: PushProvider.EXPO,
+        endpoint: null,
+        p256dh: null,
+        auth: null,
+      });
+
+      await repository.save(subscription);
+    });
+  },
+
+  async deleteMobile(userId: string, token: string) {
+    await this.delete({ userId, token, provider: PushProvider.EXPO });
+  },
+
+  async removeInvalidMobile(id: string, token: string) {
+    await this.delete({ id, token, provider: PushProvider.EXPO });
   },
 
   async findByEndpoint(endpoint: string, manager?: EntityManager) {
