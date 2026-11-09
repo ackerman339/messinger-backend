@@ -19,6 +19,8 @@ import {
   ListUserMessagesSchema,
   ListUsersSchema,
   ListConversationsSchema,
+  MobilePushSubscriptionSchema,
+  MobilePushUnsubscriptionSchema,
   WebPushSubscriptionSchema,
   WebPushUnsubscriptionSchema,
   DeleteMessagesSchema,
@@ -53,6 +55,8 @@ import {
   listUserConversations,
   listConversationMessages,
   listAdmins,
+  subscribeMobile,
+  unsubscribeMobile,
   subscribeWeb,
   unsubscribeWeb,
   deleteMessages,
@@ -287,6 +291,22 @@ router.delete(
   authorize(UserRole.USER),
   validateDTO(WebPushUnsubscriptionSchema),
   unsubscribeWeb
+);
+
+router.post(
+  '/push/subscribe-mobile',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(MobilePushSubscriptionSchema),
+  subscribeMobile
+);
+
+router.delete(
+  '/push/unsubscribe-mobile',
+  authenticate,
+  authorize(UserRole.USER),
+  validateDTO(MobilePushUnsubscriptionSchema),
+  unsubscribeMobile
 );
 
 router.post(

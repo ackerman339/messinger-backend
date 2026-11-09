@@ -110,6 +110,9 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1),
   R2_BUCKET_NAME: z.string().min(1),
 
+  // Optional when Expo push security is enabled in the Expo dashboard.
+  EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+
   // Webpush
   VAPID_PUBLIC_KEY: z.string().min(1),
   VAPID_PRIVATE_KEY: z.string().min(1),
