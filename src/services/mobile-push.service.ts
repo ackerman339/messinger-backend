@@ -1,6 +1,7 @@
 import { env } from '@config/environment';
 import { PushNotificationPayload } from '@dtos';
 import { BaseException } from '@exceptions';
+import type { PushPlatform } from '@appTypes';
 
 // Describe the fields we consume without enforcing Expo's response shape at runtime.
 interface ExpoPushResult {
@@ -20,6 +21,7 @@ export class MobilePushError extends BaseException {
 }
 
 export interface MobilePushOptions {
+  platform?: PushPlatform;
   ttl?: number;
   priority?: 'default' | 'normal' | 'high';
 }
@@ -45,15 +47,17 @@ class MobilePushService {
   }
 
   async send(token: string, payload: PushNotificationPayload, options?: MobilePushOptions) {
+    const incomingCall = payload.data.type === 'call-incoming' && options?.platform !== 'IOS';
     const result = (await this.request({
       to: token,
-      title: payload.title,
-      body: payload.body,
       data: payload.data,
-      sound: 'default',
-      channelId: 'messages',
+      // Presentation fields make Android show the push without starting the terminated app's task.
+      // Incoming calls must wake that task; it creates the native ringing notification and actions.
+      ...(incomingCall
+        ? { _contentAvailable: true }
+        : { title: payload.title, body: payload.body, sound: 'default', channelId: 'messages' }),
       ttl: options?.ttl,
-      priority: options?.priority ?? 'high',
+      priority: incomingCall ? 'high' : (options?.priority ?? 'high'),
     })) as ExpoPushResponse;
 
     if (result?.errors?.length) {
