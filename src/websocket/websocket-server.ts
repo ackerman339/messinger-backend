@@ -7,7 +7,7 @@ import { authService, offlineSyncService } from '@services';
 import { connectionManager } from './managers/connection-manager';
 import { parseWsMessage } from './message-parser';
 import { registerEventHandlers } from './register-event-handlers';
-import { presenceOnlineHandler, presenceOfflineHandler } from './handlers/presence-handler';
+import { presenceHandler } from './handlers/presence-handler';
 import { callDisconnectHandler } from './handlers/call-disconnect';
 import { sendError } from './send-error';
 
@@ -37,16 +37,9 @@ async function authenticate({ connection, socket, userId, sessionId }: WsAuthPar
   connectionManager.attachUser(connection, userId);
   connection.sessionId = sessionId;
 
-  presenceOnlineHandler(connection);
-
   await offlineSyncService.syncPendingMessages(userId);
-
-  // The socket may have closed while awaiting the previous operation.
-  if (socket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
   await offlineSyncService.syncPendingGroupInvitations(userId);
+  await presenceHandler({ userId, isConnected: true });
 
   // The socket may have closed while awaiting the previous operation.
   if (socket.readyState !== WebSocket.OPEN) {
@@ -105,19 +98,13 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
       logger.error(error);
     });
 
-    socket.on('close', (code, reason) => {
+    socket.on('close', async (code, reason) => {
       const userId = connection.userId;
 
-      connectionManager.unregister(connection.id);
-
       if (userId) {
-        const remainingConnections = connectionManager.getUserConnections(userId);
-
-        if (remainingConnections.length === 0) {
-          presenceOfflineHandler(connection);
-        }
-
-        callDisconnectHandler(userId, connection.id);
+        await presenceHandler({ userId });
+        await callDisconnectHandler(userId, connection.id);
+        connectionManager.unregister(connection.id);
       }
 
       logger.info(

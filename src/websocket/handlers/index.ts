@@ -18,3 +18,4 @@ export * from './call-connected';
 export * from './call-negotiation-init';
 export * from './call-recovered';
 export * from './call-sync';
+export * from './presence-handler';

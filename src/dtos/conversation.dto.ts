@@ -56,6 +56,10 @@ export const RequestConnectionSchema = z.object({
   conversationId: z.uuid(),
 });
 
+export const UserPresenceOnlineSchema = z.object({
+  receiverId: z.uuid(),
+});
+
 export type CreateGroupDto = z.infer<typeof CreateGroupSchema>;
 export type LeaveGroupDto = z.infer<typeof LeaveGroupSchema>;
 export type TransferOwnershipDto = z.infer<typeof TransferOwnershipSchema>;
@@ -67,3 +71,4 @@ export type ListConversationsDto = z.infer<typeof ListConversationsSchema>;
 export type DeleteMessagesDto = z.infer<typeof DeleteMessagesSchema>;
 export type ResetUnreadMessagesCountDto = z.infer<typeof ResetUnreadMessagesCountSchema>;
 export type RequestConnectionDto = z.infer<typeof RequestConnectionSchema>;
+export type UserPresenceOnlineDto = z.infer<typeof UserPresenceOnlineSchema>;
