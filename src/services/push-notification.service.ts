@@ -20,6 +20,7 @@ class PushNotificationService {
         let notification: Promise<unknown>;
         if (subscription.provider === PushProvider.EXPO && subscription.token) {
           notification = mobilePushService.send(subscription.token, payload, {
+            recipientId: userId,
             platform: subscription.platform,
             ttl: options?.TTL,
             priority:
