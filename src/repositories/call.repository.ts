@@ -263,7 +263,17 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
 
       await CallNegotiationRepository.cancelPendingForCall(manager, callId);
 
-      return repository.findOneByOrFail({ id: callId });
+      return repository.findOneOrFail({
+        where: { id: callId },
+        relations: { caller: true },
+        select: {
+          id: true,
+          callerId: true,
+          calleeId: true,
+          endedAt: true,
+          caller: { id: true, username: true },
+        },
+      });
     });
   },
 
@@ -411,7 +421,18 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         await CallNegotiationRepository.cancelPendingForCall(manager, call.id);
       }
 
-      return calls;
+      if (!calls.length) return [];
+      return manager.getRepository(Call).find({
+        where: { id: In(calls.map((call) => call.id)) },
+        relations: { caller: true },
+        select: {
+          id: true,
+          callerId: true,
+          calleeId: true,
+          endedAt: true,
+          caller: { id: true, username: true },
+        },
+      });
     });
   },
 

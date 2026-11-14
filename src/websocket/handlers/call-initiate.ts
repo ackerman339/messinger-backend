@@ -18,8 +18,8 @@ export async function callInitHandler({ connection, message }: WsHandlers<CallIn
   }
 
   const data = CallInitSchema.parse(message.data);
-  const callerName = data.callerName ?? 'Usuario desconocido';
   const { call, created } = await callService.init(callerId, connection.id, data);
+  const callerName = data.callerName ?? 'Usuario desconocido';
 
   // Keep the existing post-await connection check here.
 

@@ -131,9 +131,10 @@ export class CallService {
 
     return calls.map((call) => ({
       callId: call.id,
-      callerId: call.caller_id,
-      calleeId: call.callee_id,
-      endedAt: call.ended_at,
+      callerId: call.callerId,
+      callerName: call.caller?.username ?? null,
+      calleeId: call.calleeId,
+      endedAt: call.endedAt,
     }));
   }
 

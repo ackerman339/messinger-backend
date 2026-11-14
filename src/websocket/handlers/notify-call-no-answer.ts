@@ -7,11 +7,13 @@ import { sendMessage } from '../send-message';
 type MissedCallData = {
   callId: string;
   callerId: string;
+  callerName: string | null;
   calleeId: string;
   endedAt: Date | null;
 };
 
 export function notifyCallNoAnswer(call: MissedCallData) {
+  const callerName = call.callerName?.trim() || 'Usuario desconocido';
   for (const userId of [call.callerId, call.calleeId]) {
     const connections = connectionManager.getUserConnections(userId);
 
@@ -19,13 +21,14 @@ export function notifyCallNoAnswer(call: MissedCallData) {
       void pushNotificationService.sendToUser(
         call.calleeId,
         {
-          title: 'Llamada perdida',
+          title: `Llamada perdida de ${callerName}`,
           body: 'Tienes una llamada sin contestar en Messinger.',
           icon: '/pwa-192x192.png',
           data: {
             type: 'call-missed',
             callId: call.callId,
             callerId: call.callerId,
+            callerName,
           },
         },
         {
@@ -40,6 +43,7 @@ export function notifyCallNoAnswer(call: MissedCallData) {
         type: WS_SERVER_EVENTS.CALL_END,
         data: {
           ...call,
+          callerName,
           status: CallStatus.MISSED,
           reason: 'NO_ANSWER',
         },
