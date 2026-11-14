@@ -14,6 +14,7 @@ export const PushNotificationSchema = z.object({
       type: z.enum(['call-incoming', 'call-missed']),
       callId: z.uuid(),
       callerId: z.uuid(),
+      callerName: z.string().trim().min(1).max(100).optional(),
       media: z.enum(['audio', 'video']).optional(),
       expiresAt: z.iso.datetime().nullable().optional(),
     }),

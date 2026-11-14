@@ -4,6 +4,7 @@ import { WS_CLIENT_EVENTS } from '@constants';
 
 export const CallInitSchema = z.object({
   calleeId: z.uuid(),
+  callerName: z.string().trim().min(1).max(100).optional(),
   media: z.enum(CallMedia),
   requestId: z.uuid(),
 });
