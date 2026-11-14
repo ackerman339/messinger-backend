@@ -18,9 +18,10 @@ export async function callEndHandler({ connection, message }: WsHandlers<CallRef
 
   const { callId } = CallReferenceSchema.parse(message.data);
 
-  const { call, changed } = await callService.end(userId, callId);
+  const { call, changed, conversationEvent } = await callService.end(userId, callId);
 
   const data = {
+    conversationEvent,
     callId: call.id,
     callerId: call.callerId,
     calleeId: call.calleeId,

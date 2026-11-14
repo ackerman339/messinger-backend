@@ -54,4 +54,7 @@ export class ConversationEvent {
     type: 'timestamptz',
   })
   createdAt: Date;
+
+  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
+  metadata: Record<string, unknown>;
 }

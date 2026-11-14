@@ -1,3 +1,4 @@
+import type { ConversationEvent } from '@entities';
 import { pushNotificationService } from '@services';
 import { CallStatus } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
@@ -5,6 +6,7 @@ import { connectionManager } from '../managers/connection-manager';
 import { sendMessage } from '../send-message';
 
 type MissedCallData = {
+  conversationEvent?: ConversationEvent;
   callId: string;
   callerId: string;
   callerName: string | null;

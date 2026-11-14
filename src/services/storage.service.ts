@@ -12,8 +12,11 @@ import { r2Client } from '@config/r2-client';
 import { env } from '@config/environment';
 import { BadRequestException } from '@exceptions';
 import { UploadDto, MessageAttachmentDto } from '@dtos';
-import { MessageAttachment } from '@entities';
-import { PendingUploadRepository, MessageAttachmentRepository } from '@repositories';
+import {
+  type AttachmentInput,
+  PendingUploadRepository,
+  MessageAttachmentRepository,
+} from '@repositories';
 
 type ProcessAttachmentsParams = {
   userId: string;
@@ -104,7 +107,7 @@ class StorageService {
     }
 
     const pendingUploadIds: string[] = [];
-    const messageAttachments: Partial<MessageAttachment>[] = [];
+    const messageAttachments: AttachmentInput[] = [];
 
     for (const attachment of attachments) {
       const pendingUpload = await PendingUploadRepository.findByIdAndUser(

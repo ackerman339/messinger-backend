@@ -1,7 +1,7 @@
 import { EntityManager, MoreThan, LessThan, Raw, FindOptionsWhere, In } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { DeleteMessagesDto } from '@dtos';
-import { Message } from '@entities';
+import { Message, ConversationEvent } from '@entities';
 
 type FindMessagesParams = {
   limit: number;
@@ -33,7 +33,7 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
 
   async findByConversation({ conversationId, limit, cursor, lastDeletedAt }: FindMessagesParams) {
     let createdAt;
-    let cursorMessage;
+    let cursorMessage: Pick<Message, 'id' | 'createdAt'> | null = null;
 
     const where: FindOptionsWhere<Message> = {
       conversationId,
@@ -51,6 +51,14 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
           createdAt: true,
           attachments: true,
         },
+      });
+    }
+
+    // The shared history cursor can belong to a message or a conversation event.
+    if (cursor && !cursorMessage) {
+      cursorMessage = await AppDataSource.getRepository(ConversationEvent).findOne({
+        where: { id: cursor, conversationId },
+        select: { id: true, createdAt: true },
       });
     }
 

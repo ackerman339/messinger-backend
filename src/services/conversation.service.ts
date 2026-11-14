@@ -520,7 +520,7 @@ class ConversationService {
           messagesCursor: nextCursor,
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
-          lastMessage: page.at(-1),
+          lastMessage: page.at(0),
           members: conversation.members.map((member) => ({
             userId: member.user.id,
             username: member.user.username,

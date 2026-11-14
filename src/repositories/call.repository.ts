@@ -9,7 +9,7 @@ import { CallNegotiationRepository } from './call-negotiation.repository';
 
 type CreateCallData = Pick<
   Call,
-  'callerId' | 'calleeId' | 'callerConnectionId' | 'media' | 'requestId'
+  'callerId' | 'calleeId' | 'callerConnectionId' | 'media' | 'requestId' | 'conversationId'
 >;
 
 type ClosedCallRow = {
@@ -268,6 +268,9 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         relations: { caller: true },
         select: {
           id: true,
+          conversationId: true,
+          media: true,
+          status: true,
           callerId: true,
           calleeId: true,
           endedAt: true,
@@ -427,6 +430,9 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         relations: { caller: true },
         select: {
           id: true,
+          conversationId: true,
+          media: true,
+          status: true,
           callerId: true,
           calleeId: true,
           endedAt: true,

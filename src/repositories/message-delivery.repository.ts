@@ -1,9 +1,13 @@
-import { DeepPartial, EntityManager } from 'typeorm';
+import { EntityManager } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { MessageDelivery } from '@entities';
 
+type DeliveryInput = Pick<MessageDelivery, 'messageId' | 'userId' | 'status'>;
+
+type DeliveryStatusInput = Partial<Pick<MessageDelivery, 'status' | 'deliveredAt' | 'readAt'>>;
+
 export const MessageDeliveryRepository = AppDataSource.getRepository(MessageDelivery).extend({
-  async createDeliveries(deliveries: DeepPartial<MessageDelivery>[], manager?: EntityManager) {
+  async createDeliveries(deliveries: DeliveryInput[], manager?: EntityManager) {
     const repository = manager ? manager.getRepository(MessageDelivery) : this;
 
     return repository.insert(deliveries);
@@ -35,7 +39,7 @@ export const MessageDeliveryRepository = AppDataSource.getRepository(MessageDeli
     });
   },
 
-  async updateDeliveryStatus(id: string, data: Partial<MessageDelivery>) {
+  async updateDeliveryStatus(id: string, data: DeliveryStatusInput) {
     return this.update(id, data);
   },
 });

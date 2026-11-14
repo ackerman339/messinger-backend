@@ -18,9 +18,10 @@ export async function callRejectHandler({ connection, message }: WsHandlers<Call
 
   const { callId } = CallReferenceSchema.parse(message.data);
 
-  const { call, changed } = await callService.reject(userId, callId);
+  const { call, changed, conversationEvent } = await callService.reject(userId, callId);
 
   const data = {
+    conversationEvent,
     callId: call.id,
     callerId: call.callerId,
     calleeId: call.calleeId,

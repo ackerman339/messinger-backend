@@ -244,7 +244,12 @@ class MessageService {
         cursor,
         ...(includeSoftDelete ? { lastDeletedAt: member?.emptyMessagesAt } : {}),
       }),
-      ConversationEventRepository.findByConversation({ conversationId, limit, cursor }),
+      ConversationEventRepository.findByConversation({
+        conversationId,
+        limit,
+        cursor,
+        ...(includeSoftDelete ? { lastDeletedAt: member?.emptyMessagesAt } : {}),
+      }),
     ]);
 
     const history = [
@@ -260,12 +265,12 @@ class MessageService {
       ...events,
     ];
 
-    history.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    history.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     const hasMore = history.length > limit;
-    const page = history.slice(0, limit + 1);
-    const firstItem = page.at(0);
-    const nextCursor = hasMore ? firstItem?.id : null;
+    const page = history.slice(0, limit);
+    const lastItem = page.at(-1);
+    const nextCursor = hasMore ? lastItem?.id : null;
 
     return {
       page,

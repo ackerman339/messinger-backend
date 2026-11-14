@@ -22,6 +22,8 @@ export enum ConversationEventType {
   MEMBER_LEFT = 'MEMBER_LEFT',
   MEMBER_REMOVED = 'MEMBER_REMOVED',
   OWNERSHIP_TRANSFERRED = 'OWNERSHIP_TRANSFERRED',
+  CALL_ACCEPTED = 'CALL_ACCEPTED',
+  CALL_END = 'CALL_END',
 }
 
 export enum GroupInvitationStatus {

@@ -42,6 +42,9 @@ export class Call {
   @JoinColumn({ name: 'callee_id' })
   callee: User;
 
+  @Column({ type: 'uuid', nullable: true })
+  conversationId: string | null;
+
   @Column({ type: 'uuid' })
   callerConnectionId: string;
 

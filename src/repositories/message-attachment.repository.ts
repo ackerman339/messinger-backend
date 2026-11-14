@@ -2,8 +2,13 @@ import { AppDataSource } from '@config/database';
 import { MessageAttachment } from '@entities';
 import { EntityManager } from 'typeorm';
 
+export type AttachmentInput = Pick<
+  MessageAttachment,
+  'messageId' | 'storageKey' | 'fileName' | 'contentType' | 'size'
+>;
+
 export const MessageAttachmentRepository = AppDataSource.getRepository(MessageAttachment).extend({
-  async createAttachments(attachments: Partial<MessageAttachment>[], manager?: EntityManager) {
+  async createAttachments(attachments: AttachmentInput[], manager?: EntityManager) {
     const repository = manager ? manager.getRepository(MessageAttachment) : this;
 
     if (attachments.length === 0) {

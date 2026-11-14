@@ -1,6 +1,6 @@
 import { EntityManager, LessThan, FindOptionsWhere } from 'typeorm';
 import { AppDataSource } from '@config/database';
-import { ConversationEvent } from '@entities';
+import { ConversationEvent, Message } from '@entities';
 
 type FindMessagesParams = {
   limit: number;
@@ -16,7 +16,7 @@ export const ConversationEventRepository = AppDataSource.getRepository(Conversat
   },
 
   async findByConversation({ conversationId, limit, cursor }: FindMessagesParams) {
-    let cursorEvent;
+    let cursorEvent: Pick<ConversationEvent, 'id' | 'createdAt'> | null = null;
 
     const where: FindOptionsWhere<ConversationEvent> = {
       conversationId,
@@ -35,6 +35,14 @@ export const ConversationEventRepository = AppDataSource.getRepository(Conversat
       });
     }
 
+    // The shared history cursor can belong to a message or a conversation event.
+    if (cursor && !cursorEvent) {
+      cursorEvent = await AppDataSource.getRepository(Message).findOne({
+        where: { id: cursor, conversationId },
+        select: { id: true, createdAt: true },
+      });
+    }
+
     if (cursorEvent) {
       where.createdAt = LessThan(cursorEvent?.createdAt);
     }
@@ -42,7 +50,7 @@ export const ConversationEventRepository = AppDataSource.getRepository(Conversat
     return this.find({
       where,
       order: {
-        createdAt: 'ASC',
+        createdAt: 'DESC',
       },
       take: limit + 1,
     });

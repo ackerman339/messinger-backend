@@ -1,7 +1,12 @@
 import { ForbiddenException, NotFoundException } from '@exceptions';
-import { CallMedia, CallStatus } from '@appTypes';
+import { CallMedia, CallStatus, ConversationEventType } from '@appTypes';
 import { CallInitDto, CallSyncDto, CallHistoryDto } from '@dtos';
-import { CallRepository, UserRepository } from '@repositories';
+import {
+  CallRepository,
+  UserRepository,
+  ConversationEventRepository,
+  ConversationMemberRepository,
+} from '@repositories';
 import { Call } from '@entities';
 import { paginate } from '@utils';
 
@@ -9,7 +14,7 @@ export class CallService {
   async init(
     callerId: string,
     callerConnectionId: string,
-    { calleeId, media, requestId }: CallInitDto
+    { calleeId, media, requestId, conversationId }: CallInitDto
   ) {
     if (callerId === calleeId) {
       throw new ForbiddenException('CALL_SELF_NOT_ALLOWED');
@@ -24,6 +29,15 @@ export class CallService {
       throw new NotFoundException('CALL_CALLEE_NOT_FOUND');
     }
 
+    if (conversationId) {
+      const [callerMember, calleeMember] = await Promise.all([
+        ConversationMemberRepository.exists(conversationId, callerId),
+        ConversationMemberRepository.exists(conversationId, calleeId),
+      ]);
+      if (!callerMember || !calleeMember)
+        throw new ForbiddenException('CALL_CONVERSATION_NOT_ALLOWED');
+    }
+
     const callMedia = media === 'audio' ? CallMedia.AUDIO : CallMedia.VIDEO;
 
     const result = await CallRepository.createIfParticipantsAvailable({
@@ -31,6 +45,7 @@ export class CallService {
       calleeId,
       callerConnectionId,
       requestId,
+      conversationId: conversationId ?? null,
       media: callMedia,
     });
 
@@ -44,6 +59,7 @@ export class CallService {
       call.callerId !== callerId ||
       call.calleeId !== calleeId ||
       call.media !== callMedia ||
+      call.conversationId !== (conversationId ?? null) ||
       call.callerConnectionId !== callerConnectionId
     ) {
       throw new ForbiddenException('CALL_REQUEST_CONFLICT');
@@ -69,7 +85,27 @@ export class CallService {
       throw new ForbiddenException('CALL_NOT_REJECTABLE');
     }
 
-    return result;
+    const { call, changed } = result;
+    if (!changed || !call.conversationId) return { ...result, conversationEvent: undefined };
+
+    const conversationEvent = await ConversationEventRepository.createEvent({
+      conversationId: call.conversationId,
+      actorId: userId,
+      targetUserId: null,
+      type: ConversationEventType.CALL_END,
+      createdAt: call.endedAt!,
+      metadata: {
+        callId: call.id,
+        callerId: call.callerId,
+        calleeId: call.calleeId,
+        media: call.media,
+        status: call.status,
+        endedAt: call.endedAt,
+        durationSeconds: 0,
+      },
+    });
+
+    return { ...result, conversationEvent };
   }
 
   async end(userId: string, callId: string) {
@@ -79,14 +115,59 @@ export class CallService {
       throw new ForbiddenException('CALL_NOT_ENDABLE');
     }
 
-    return result;
+    const { call, changed } = result;
+    if (!changed) return { ...result, conversationEvent: undefined };
+
+    if (!call.conversationId) return { ...result, conversationEvent: undefined };
+
+    const conversationEvent = await ConversationEventRepository.createEvent({
+      conversationId: call.conversationId,
+      actorId: userId,
+      targetUserId: null,
+      type: call.acceptedAt ? ConversationEventType.CALL_ACCEPTED : ConversationEventType.CALL_END,
+      createdAt: call.endedAt!,
+      metadata: {
+        callId: call.id,
+        callerId: call.callerId,
+        calleeId: call.calleeId,
+        media: call.media,
+        status: call.status,
+        acceptedAt: call.acceptedAt,
+        connectedAt: call.connectedAt,
+        endedAt: call.endedAt,
+        durationSeconds:
+          call.connectedAt && call.endedAt
+            ? Math.max(0, Math.floor((call.endedAt.getTime() - call.connectedAt.getTime()) / 1000))
+            : 0,
+      },
+    });
+
+    return { ...result, conversationEvent };
   }
 
   async timeout(userId: string, connectionId: string, callId: string) {
     const call = await CallRepository.timeoutIfExpired(callId, userId, connectionId);
 
     if (call) {
-      return call;
+      const conversationEvent = call.conversationId
+        ? await ConversationEventRepository.createEvent({
+            conversationId: call.conversationId,
+            actorId: call.callerId,
+            targetUserId: null,
+            type: ConversationEventType.CALL_END,
+            createdAt: call.endedAt!,
+            metadata: {
+              callId: call.id,
+              callerId: call.callerId,
+              calleeId: call.calleeId,
+              media: call.media,
+              status: call.status,
+              endedAt: call.endedAt,
+              durationSeconds: 0,
+            },
+          })
+        : undefined;
+      return { ...call, conversationEvent };
     }
 
     const missedCall = await CallRepository.findOne({
@@ -129,13 +210,36 @@ export class CallService {
   async expireRinging() {
     const calls = await CallRepository.expireRinging();
 
-    return calls.map((call) => ({
-      callId: call.id,
-      callerId: call.callerId,
-      callerName: call.caller?.username ?? null,
-      calleeId: call.calleeId,
-      endedAt: call.endedAt,
-    }));
+    return Promise.all(
+      calls.map(async (call) => {
+        const conversationEvent = call.conversationId
+          ? await ConversationEventRepository.createEvent({
+              conversationId: call.conversationId,
+              actorId: call.callerId,
+              targetUserId: null,
+              type: ConversationEventType.CALL_END,
+              createdAt: call.endedAt!,
+              metadata: {
+                callId: call.id,
+                callerId: call.callerId,
+                calleeId: call.calleeId,
+                media: call.media,
+                status: call.status,
+                endedAt: call.endedAt,
+                durationSeconds: 0,
+              },
+            })
+          : undefined;
+        return {
+          callId: call.id,
+          callerId: call.callerId,
+          callerName: call.caller?.username ?? null,
+          calleeId: call.calleeId,
+          endedAt: call.endedAt,
+          conversationEvent,
+        };
+      })
+    );
   }
 
   async expireConnecting() {
