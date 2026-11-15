@@ -44,6 +44,10 @@ const UPLOAD_CONTENT_TYPES = [
   'application/vnd.oasis.opendocument.spreadsheet',
   'application/vnd.oasis.opendocument.presentation',
 
+  // Text documents
+  'text/plain',
+  'text/csv',
+
   // GIS
   'application/vnd.google-earth.kml+xml', // .kml
   'application/vnd.google-earth.kmz', // .kmz
