@@ -15,3 +15,4 @@ export * from './1787692001701-UniqueUsernameMigration';
 export * from './1788102779492-EmptyChatMigration';
 export * from './1794004694733-CallsMigration';
 export * from './1794657600000-CallConversationEventsMigration';
+export * from './1794675600000-CallHistoryDeletionMigration';

@@ -1,3 +1,4 @@
+import { HistoryCursorSchema } from './history-cursor.dto';
 import { z } from 'zod';
 import { env } from '@config/environment';
 
@@ -26,7 +27,7 @@ export const DeleteConversationSchema = z.object({
 
 export const GetConversationMessagesSchema = z.object({
   conversationId: z.uuid(),
-  cursor: z.uuid().optional(),
+  cursor: HistoryCursorSchema.optional(),
   limit: z.coerce.number().int().min(1).max(env.MAX_PAGE_SIZE).default(env.DEFAULT_PAGE_SIZE),
 });
 

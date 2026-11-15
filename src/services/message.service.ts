@@ -245,6 +245,7 @@ class MessageService {
         ...(includeSoftDelete ? { lastDeletedAt: member?.emptyMessagesAt } : {}),
       }),
       ConversationEventRepository.findByConversation({
+        userId,
         conversationId,
         limit,
         cursor,
@@ -270,7 +271,8 @@ class MessageService {
     const hasMore = history.length > limit;
     const page = history.slice(0, limit);
     const lastItem = page.at(-1);
-    const nextCursor = hasMore ? lastItem?.id : null;
+    const nextCursor =
+      hasMore && lastItem ? `${lastItem.createdAt.getTime()}.${lastItem.id}` : null;
 
     return {
       page,

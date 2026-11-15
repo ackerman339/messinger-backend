@@ -25,6 +25,8 @@ export async function callTimeoutHandler({ connection, message }: WsHandlers<Cal
 
   notifyCallNoAnswer({
     conversationEvent: expiredCall.conversationEvent,
+    callerHistoryDeletedAt: expiredCall.callerHistoryDeletedAt,
+    calleeHistoryDeletedAt: expiredCall.calleeHistoryDeletedAt,
     callId: expiredCall.id,
     callerId: expiredCall.callerId,
     callerName: expiredCall.caller?.username ?? null,

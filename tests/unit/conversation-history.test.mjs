@@ -11,7 +11,7 @@ const source = fs.readFileSync(
 const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.CommonJS },
 }).outputText;
-function fixture(messages, events) {
+function fixture(messages, events, deletedIds = []) {
   const rows = {
     Message: messages.map((item) => ({ conversationId: 'conversation', ...item })),
     ConversationEvent: events.map((item) => ({ conversationId: 'conversation', ...item })),
@@ -26,7 +26,10 @@ function fixture(messages, events) {
         async findOne({ where }) {
           return (
             items.find(
-              (item) => item.id === where.id && item.conversationId === where.conversationId
+              (item) =>
+                !deletedIds.includes(item.id) &&
+                item.id === where.id &&
+                item.conversationId === where.conversationId
             ) ?? null
           );
         },
@@ -34,6 +37,7 @@ function fixture(messages, events) {
           return items
             .filter(
               (item) =>
+                !deletedIds.includes(item.id) &&
                 item.conversationId === where.conversationId &&
                 (!where.createdAt ||
                   (where.createdAt.type === 'lessThan' && item.createdAt < where.createdAt.value))
@@ -61,6 +65,9 @@ function fixture(messages, events) {
     const repositoryDependencies = {
       '@config/database': { AppDataSource: { getRepository: (name) => repositories[name] } },
       '@entities': { Message: 'Message', ConversationEvent: 'ConversationEvent' },
+      '@appTypes': {
+        ConversationEventType: { CALL_ACCEPTED: 'CALL_ACCEPTED', CALL_END: 'CALL_END' },
+      },
     };
     new Function('require', 'module', 'exports', repositoryCode)(
       (name) => (name === 'typeorm' ? require(name) : repositoryDependencies[name]),
@@ -108,7 +115,7 @@ test('mixed history returns the latest call before older messages and uses its l
     result.page.map((item) => item.id),
     ['recent-call', 'recent-message']
   );
-  assert.equal(result.nextCursor, 'recent-message');
+  assert.ok(result.nextCursor.endsWith('.recent-message'));
   assert.equal(result.page.length, 2);
 });
 test('the final descending page does not include a next cursor', async () => {
@@ -172,7 +179,34 @@ test('paginating with an event cursor excludes newer messages as well', async ()
     limit: 2,
     cursor: first.nextCursor,
   });
-  assert.equal(first.nextCursor, 'call');
+  assert.ok(first.nextCursor.endsWith('.call'));
+  assert.deepEqual(
+    second.page.map((item) => item.id),
+    ['old-message']
+  );
+  assert.equal(second.nextCursor, null);
+});
+
+test('chat pagination continues when the call event used as cursor was physically deleted', async () => {
+  const deletedIds = [];
+  const service = fixture(
+    [
+      message('recent-message', '2026-11-14T22:37:23Z'),
+      message('old-message', '2026-11-03T02:40:09Z'),
+    ],
+    [event('call', '2026-11-12T21:18:28Z')],
+    deletedIds
+  );
+  const first = await service.getConversationMessages('user', {
+    conversationId: 'conversation',
+    limit: 2,
+  });
+  deletedIds.push('call');
+  const second = await service.getConversationMessages('user', {
+    conversationId: 'conversation',
+    limit: 2,
+    cursor: first.nextCursor,
+  });
   assert.deepEqual(
     second.page.map((item) => item.id),
     ['old-message']

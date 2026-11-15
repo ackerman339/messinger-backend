@@ -1,4 +1,14 @@
-import { In, LessThanOrEqual, MoreThan, FindOptionsWhere, LessThan } from 'typeorm';
+import { ConversationEventRepository } from './conversation-event.repository';
+import {
+  EntityManager,
+  Not,
+  IsNull,
+  In,
+  LessThanOrEqual,
+  MoreThan,
+  FindOptionsWhere,
+  LessThan,
+} from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { CallHistoryDto } from '@dtos';
 import { CALL_CONNECTION_TIMEOUT_MS, CALL_RING_TIMEOUT_MS } from '@constants';
@@ -269,6 +279,8 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         select: {
           id: true,
           conversationId: true,
+          callerHistoryDeletedAt: true,
+          calleeHistoryDeletedAt: true,
           media: true,
           status: true,
           callerId: true,
@@ -431,6 +443,8 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
         select: {
           id: true,
           conversationId: true,
+          callerHistoryDeletedAt: true,
+          calleeHistoryDeletedAt: true,
           media: true,
           status: true,
           callerId: true,
@@ -589,9 +603,12 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
   },
 
   async getHistory(userId: string, { limit, cursor }: CallHistoryDto) {
-    let cursorCall: Call | null = null;
+    let cursorCall: Pick<Call, 'id' | 'createdAt'> | null = null;
 
-    if (cursor) {
+    if (cursor?.includes('.')) {
+      const [timestamp, id] = cursor.split('.');
+      cursorCall = { id, createdAt: new Date(Number(timestamp)) };
+    } else if (cursor) {
       cursorCall = await this.findOne({
         where: [
           { id: cursor, callerId: userId },
@@ -604,28 +621,31 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
       });
     }
 
+    const callerWhere = { callerId: userId, callerHistoryDeletedAt: IsNull() };
+    const calleeWhere = { calleeId: userId, calleeHistoryDeletedAt: IsNull() };
+
     const where: FindOptionsWhere<Call>[] = cursorCall
       ? [
           {
-            callerId: userId,
+            ...callerWhere,
             createdAt: LessThan(cursorCall.createdAt),
           },
           {
-            calleeId: userId,
+            ...calleeWhere,
             createdAt: LessThan(cursorCall.createdAt),
           },
           {
-            callerId: userId,
+            ...callerWhere,
             createdAt: cursorCall.createdAt,
             id: LessThan(cursorCall.id),
           },
           {
-            calleeId: userId,
+            ...calleeWhere,
             createdAt: cursorCall.createdAt,
             id: LessThan(cursorCall.id),
           },
         ]
-      : [{ callerId: userId }, { calleeId: userId }];
+      : [callerWhere, calleeWhere];
 
     return this.find({
       where,
@@ -658,5 +678,68 @@ export const CallRepository = AppDataSource.getRepository(Call).extend({
       },
       take: limit + 1,
     });
+  },
+
+  async deleteHistory(userId: string, callId?: string) {
+    return this.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(Call);
+      const now = new Date();
+      const callFilter = callId ? { id: callId } : {};
+      // Lock the same rows in a stable order for simultaneous/bulk deletions.
+      const historyCalls = await repository.find({
+        where: [
+          { ...callFilter, callerId: userId },
+          { ...callFilter, calleeId: userId },
+        ],
+        select: { id: true },
+        order: { id: 'ASC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!historyCalls.length) return 0;
+      const ids = historyCalls.map((call) => call.id);
+      const caller = await repository.update(
+        { id: In(ids), callerId: userId, callerHistoryDeletedAt: IsNull() },
+        { callerHistoryDeletedAt: now }
+      );
+      const callee = await repository.update(
+        { id: In(ids), calleeId: userId, calleeHistoryDeletedAt: IsNull() },
+        { calleeHistoryDeletedAt: now }
+      );
+      await this.purgeDeletedHistory(manager, { userId, callId });
+      return (caller.affected ?? 0) + (callee.affected ?? 0);
+    });
+  },
+
+  async purgeDeletedHistory(
+    manager?: EntityManager,
+    scope: { callId?: string; userId?: string } = {}
+  ): Promise<void> {
+    if (!manager) {
+      await this.manager.transaction((transaction) => this.purgeDeletedHistory(transaction, scope));
+      return;
+    }
+    const repository = manager.getRepository(Call);
+    const conditions = {
+      callerHistoryDeletedAt: Not(IsNull()),
+      calleeHistoryDeletedAt: Not(IsNull()),
+      status: In([CallStatus.ENDED, CallStatus.REJECTED, CallStatus.MISSED, CallStatus.FAILED]),
+      ...(scope.callId ? { id: scope.callId } : {}),
+    };
+    const calls = await repository.find({
+      where: scope.userId
+        ? [
+            { ...conditions, callerId: scope.userId },
+            { ...conditions, calleeId: scope.userId },
+          ]
+        : conditions,
+      select: { id: true },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!calls.length) return;
+    const ids = calls.map((call) => call.id);
+    await ConversationEventRepository.deleteCallEvents(ids, manager);
+    // Negotiations are removed by their existing ON DELETE CASCADE foreign key.
+    await repository.delete(ids);
   },
 });

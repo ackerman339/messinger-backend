@@ -27,6 +27,7 @@ import {
   ResetUnreadMessagesCountSchema,
   RequestConnectionSchema,
   CallHistorySchema,
+  DeleteCallHistorySchema,
 } from '@dtos';
 
 import {
@@ -66,6 +67,8 @@ import {
   emptyMessages,
   getTurnCredentials,
   getCallsHistory,
+  deleteCallHistory,
+  deleteAllCallHistory,
 } from '@controllers';
 
 const router = Router();
@@ -322,11 +325,26 @@ router.get('/turn/credentials', authenticate, getTurnCredentials);
 
 // Calls
 router.get(
-  '/call/history',
+  '/call/histories',
   authenticate,
-  authorize(UserRole.USER),
+  authorize(UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateDTO(CallHistorySchema),
   getCallsHistory
+);
+
+router.delete(
+  '/call/histories/:callId',
+  authenticate,
+  authorize(UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  validateDTO(DeleteCallHistorySchema),
+  deleteCallHistory
+);
+
+router.delete(
+  '/call/histories',
+  authenticate,
+  authorize(UserRole.USER, UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  deleteAllCallHistory
 );
 
 export default router;

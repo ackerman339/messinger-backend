@@ -7,6 +7,8 @@ import { sendMessage } from '../send-message';
 
 type MissedCallData = {
   conversationEvent?: ConversationEvent;
+  callerHistoryDeletedAt?: Date | null;
+  calleeHistoryDeletedAt?: Date | null;
   callId: string;
   callerId: string;
   callerName: string | null;
@@ -15,6 +17,7 @@ type MissedCallData = {
 };
 
 export function notifyCallNoAnswer(call: MissedCallData) {
+  const { callerHistoryDeletedAt, calleeHistoryDeletedAt, ...callData } = call;
   const callerName = call.callerName?.trim() || 'Usuario desconocido';
   for (const userId of [call.callerId, call.calleeId]) {
     const connections = connectionManager.getUserConnections(userId);
@@ -44,7 +47,12 @@ export function notifyCallNoAnswer(call: MissedCallData) {
       sendMessage(connection, {
         type: WS_SERVER_EVENTS.CALL_END,
         data: {
-          ...call,
+          ...callData,
+          conversationEvent: (
+            userId === call.callerId ? callerHistoryDeletedAt : calleeHistoryDeletedAt
+          )
+            ? undefined
+            : call.conversationEvent,
           callerName,
           status: CallStatus.MISSED,
           reason: 'NO_ANSWER',

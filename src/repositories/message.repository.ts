@@ -39,7 +39,10 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
       conversationId,
     };
 
-    if (cursor) {
+    if (cursor?.includes('.')) {
+      const [timestamp, id] = cursor.split('.');
+      cursorMessage = { id, createdAt: new Date(Number(timestamp)) };
+    } else if (cursor) {
       cursorMessage = await this.findOne({
         where: {
           id: cursor,

@@ -70,6 +70,7 @@ async function expireCalls() {
     await expireConnectingCalls();
     await expireRecoveringCalls();
     await expireNegotiations();
+    await callService.purgeDeletedHistory();
   } finally {
     running = false;
   }

@@ -1,3 +1,4 @@
+import { HistoryCursorSchema } from './history-cursor.dto';
 import { z } from 'zod';
 import { USERNAME_MIN_LENGTH, USERNAME_MAX_LENGTH, USERNAME_REGEX } from '@constants';
 
@@ -29,7 +30,7 @@ export const UserSchema = z.object({
 export const ListUserMessagesSchema = z.object({
   userId: z.uuid(),
   conversationId: z.uuid(),
-  cursor: z.uuid().optional(),
+  cursor: HistoryCursorSchema.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(30),
 });
 

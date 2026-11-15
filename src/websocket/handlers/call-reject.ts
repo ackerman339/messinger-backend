@@ -52,7 +52,16 @@ export async function callRejectHandler({ connection, message }: WsHandlers<Call
     for (const participantConnection of connections) {
       sendMessage(participantConnection, {
         type: WS_SERVER_EVENTS.CALL_REJECT,
-        data,
+        data: {
+          ...data,
+          conversationEvent: (
+            participantId === call.callerId
+              ? call.callerHistoryDeletedAt
+              : call.calleeHistoryDeletedAt
+          )
+            ? undefined
+            : conversationEvent,
+        },
       });
     }
   }

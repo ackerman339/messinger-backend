@@ -279,3 +279,68 @@ test('missed call notification delivers the saved event to both participants', (
     assert.equal(message.data.conversationEvent, conversationEvent);
   }
 });
+
+test('a rejected call does not restore an event already deleted by its caller', async () => {
+  const { service, call, saved } = fixture();
+  Object.assign(call, {
+    status: 'rejected',
+    acceptedAt: null,
+    connectedAt: null,
+    callerHistoryDeletedAt: new Date(),
+  });
+  const sent = [];
+  const { callRejectHandler } = load('../../src/websocket/handlers/call-reject.ts', {
+    '@constants': { WS_SERVER_EVENTS: { CALL_REJECT: 'CALL_REJECT' } },
+    '@dtos': { CallReferenceSchema: { parse: (data) => data } },
+    '@services': { callService: service },
+    '../authenticate-guard': { requireAuthentication() {} },
+    '../managers/connection-manager': {
+      connectionManager: { getUserConnections: (userId) => [{ id: userId, userId }] },
+    },
+    '../send-message': { sendMessage: (connection, message) => sent.push({ connection, message }) },
+  });
+  await callRejectHandler({
+    connection: { id: 'bob', userId: 'bob' },
+    message: { data: { callId: 'call' } },
+  });
+  assert.equal(
+    sent.find((item) => item.connection.userId === 'alice').message.data.conversationEvent,
+    undefined
+  );
+  assert.equal(
+    sent.find((item) => item.connection.userId === 'bob').message.data.conversationEvent,
+    saved[0]
+  );
+});
+
+test('missed notifications do not restore deleted events or expose history deletion flags', () => {
+  const sent = [];
+  const { notifyCallNoAnswer } = load('../../src/websocket/handlers/notify-call-no-answer.ts', {
+    '@services': { pushNotificationService: { sendToUser: async () => {} } },
+    '@appTypes': { CallStatus: { MISSED: 'missed' } },
+    '@constants': { WS_SERVER_EVENTS: { CALL_END: 'CALL_END' } },
+    '../managers/connection-manager': {
+      connectionManager: { getUserConnections: (userId) => [{ userId }] },
+    },
+    '../send-message': { sendMessage: (connection, message) => sent.push({ connection, message }) },
+  });
+  const conversationEvent = { id: 'event' };
+  notifyCallNoAnswer({
+    callId: 'call',
+    callerId: 'alice',
+    calleeId: 'bob',
+    callerName: 'Alice',
+    endedAt: new Date(),
+    callerHistoryDeletedAt: new Date(),
+    conversationEvent,
+  });
+  assert.equal(
+    sent.find((item) => item.connection.userId === 'alice').message.data.conversationEvent,
+    undefined
+  );
+  assert.equal(
+    sent.find((item) => item.connection.userId === 'bob').message.data.conversationEvent,
+    conversationEvent
+  );
+  for (const { message } of sent) assert.equal('callerHistoryDeletedAt' in message.data, false);
+});

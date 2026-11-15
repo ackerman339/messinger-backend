@@ -237,6 +237,8 @@ export class CallService {
           calleeId: call.calleeId,
           endedAt: call.endedAt,
           conversationEvent,
+          callerHistoryDeletedAt: call.callerHistoryDeletedAt,
+          calleeHistoryDeletedAt: call.calleeHistoryDeletedAt,
         };
       })
     );
@@ -339,7 +341,24 @@ export class CallService {
     const calls = await CallRepository.getHistory(userId, dto);
     const { page, nextCursor } = paginate<Call>({ items: calls, limit: dto.limit });
 
-    return { page, nextCursor };
+    const last = page.at(-1);
+    return {
+      page,
+      nextCursor: nextCursor && last ? `${last.createdAt.getTime()}.${last.id}` : null,
+    };
+  }
+
+  async deleteHistory(userId: string, callId: string) {
+    const deleted = await CallRepository.deleteHistory(userId, callId);
+    if (!deleted) throw new NotFoundException('CALL_HISTORY_NOT_FOUND');
+  }
+
+  async deleteAllHistory(userId: string) {
+    await CallRepository.deleteHistory(userId);
+  }
+
+  async purgeDeletedHistory() {
+    await CallRepository.purgeDeletedHistory();
   }
 }
 

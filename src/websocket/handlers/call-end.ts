@@ -54,6 +54,13 @@ export async function callEndHandler({ connection, message }: WsHandlers<CallRef
         type: WS_SERVER_EVENTS.CALL_END,
         data: {
           ...data,
+          conversationEvent: (
+            participantId === call.callerId
+              ? call.callerHistoryDeletedAt
+              : call.calleeHistoryDeletedAt
+          )
+            ? undefined
+            : conversationEvent,
           endedBy: userId,
         },
       });

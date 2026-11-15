@@ -123,6 +123,12 @@ export class Call {
   })
   recoveryExpiresAt: Date | null;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  callerHistoryDeletedAt: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  calleeHistoryDeletedAt: Date | null;
+
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }
