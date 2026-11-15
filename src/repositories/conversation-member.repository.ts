@@ -166,6 +166,7 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
       },
       {
         emptyMessagesAt: new Date(),
+        unreadCount: 0,
       }
     );
   },

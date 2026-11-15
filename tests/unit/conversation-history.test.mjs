@@ -11,7 +11,17 @@ const source = fs.readFileSync(
 const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.CommonJS },
 }).outputText;
-function fixture(messages, events, deletedIds = []) {
+function matchesDate(date, condition) {
+  if (!condition) return true;
+  if (condition.type === 'lessThan') return date < condition.value;
+  if (condition.type === 'moreThan') return date > condition.value;
+  if (condition.type === 'raw') {
+    const { lastDeletedAt, cursorCreatedAt } = condition.objectLiteralParameters;
+    return date > lastDeletedAt && date < cursorCreatedAt;
+  }
+  throw new Error(`Unsupported date filter: ${condition.type}`);
+}
+function fixture(messages, events, deletedIds = [], cutoffs = {}) {
   const rows = {
     Message: messages.map((item) => ({ conversationId: 'conversation', ...item })),
     ConversationEvent: events.map((item) => ({ conversationId: 'conversation', ...item })),
@@ -39,8 +49,7 @@ function fixture(messages, events, deletedIds = []) {
               (item) =>
                 !deletedIds.includes(item.id) &&
                 item.conversationId === where.conversationId &&
-                (!where.createdAt ||
-                  (where.createdAt.type === 'lessThan' && item.createdAt < where.createdAt.value))
+                matchesDate(item.createdAt, where.createdAt)
             )
             .sort((a, b) =>
               order.createdAt === 'DESC' ? b.createdAt - a.createdAt : a.createdAt - b.createdAt
@@ -82,7 +91,9 @@ function fixture(messages, events, deletedIds = []) {
     '@exceptions': {},
     '@services': {},
     '@repositories': {
-      ConversationMemberRepository: { findMember: async () => ({}) },
+      ConversationMemberRepository: {
+        findMember: async (_conversationId, userId) => ({ emptyMessagesAt: cutoffs[userId] }),
+      },
       MessageRepository: repositories.Message,
       ConversationEventRepository: repositories.ConversationEvent,
     },
@@ -212,4 +223,82 @@ test('chat pagination continues when the call event used as cursor was physicall
     ['old-message']
   );
   assert.equal(second.nextCursor, null);
+});
+
+test('emptying a chat hides old messages and all event types only for that user', async () => {
+  const cutoff = new Date('2026-11-14T12:00:00Z');
+  const service = fixture(
+    [
+      message('old-message', '2026-11-12T12:00:00Z'),
+      message('new-message', '2026-11-14T12:06:00Z'),
+    ],
+    [
+      event('old-call', '2026-11-12T13:00:00Z'),
+      { ...event('old-group-event', '2026-11-13T12:00:00Z'), type: 'MEMBER_JOINED' },
+      event('cutoff-event', '2026-11-14T12:00:00Z'),
+      event('new-call', '2026-11-14T12:05:00Z'),
+    ],
+    [],
+    { alice: cutoff }
+  );
+  const own = await service.getConversationMessages('alice', {
+    conversationId: 'conversation',
+    limit: 20,
+  });
+  assert.deepEqual(
+    own.page.map((item) => item.id),
+    ['new-message', 'new-call']
+  );
+  const other = await service.getConversationMessages('bob', {
+    conversationId: 'conversation',
+    limit: 20,
+  });
+  assert.equal(other.page.length, 6);
+  assert.ok(other.page.some((item) => item.id === 'old-group-event'));
+  const unfiltered = await service.getConversationMessages(
+    'alice',
+    { conversationId: 'conversation', limit: 20 },
+    false
+  );
+  assert.equal(unfiltered.page.length, 6);
+});
+
+test('paginating an emptied chat keeps both the cutoff and the history cursor', async () => {
+  const service = fixture(
+    [message('new-message', '2026-11-14T12:09:00Z')],
+    [
+      event('new-call', '2026-11-14T12:10:00Z'),
+      event('older-new-call', '2026-11-14T12:08:00Z'),
+      event('old-call', '2026-11-13T12:00:00Z'),
+    ],
+    [],
+    { alice: new Date('2026-11-14T12:00:00Z') }
+  );
+  const first = await service.getConversationMessages('alice', {
+    conversationId: 'conversation',
+    limit: 1,
+  });
+  const second = await service.getConversationMessages('alice', {
+    conversationId: 'conversation',
+    limit: 1,
+    cursor: first.nextCursor,
+  });
+  const third = await service.getConversationMessages('alice', {
+    conversationId: 'conversation',
+    limit: 1,
+    cursor: second.nextCursor,
+  });
+  assert.deepEqual(
+    first.page.map((item) => item.id),
+    ['new-call']
+  );
+  assert.deepEqual(
+    second.page.map((item) => item.id),
+    ['new-message']
+  );
+  assert.deepEqual(
+    third.page.map((item) => item.id),
+    ['older-new-call']
+  );
+  assert.equal(third.nextCursor, null);
 });

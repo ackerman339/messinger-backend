@@ -1,4 +1,4 @@
-import { EntityManager, LessThan, Raw, FindOptionsWhere, In } from 'typeorm';
+import { EntityManager, MoreThan, LessThan, Raw, FindOptionsWhere, In } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { ConversationEventType } from '@appTypes';
 import { ConversationEvent, Message, Call } from '@entities';
@@ -8,6 +8,7 @@ type FindMessagesParams = {
   conversationId: string;
   cursor?: string;
   userId: string;
+  lastDeletedAt?: Date | null;
 };
 
 export const ConversationEventRepository = AppDataSource.getRepository(ConversationEvent).extend({
@@ -42,7 +43,13 @@ export const ConversationEventRepository = AppDataSource.getRepository(Conversat
     });
   },
 
-  async findByConversation({ conversationId, limit, cursor, userId }: FindMessagesParams) {
+  async findByConversation({
+    conversationId,
+    limit,
+    cursor,
+    userId,
+    lastDeletedAt,
+  }: FindMessagesParams) {
     let cursorEvent: Pick<ConversationEvent, 'id' | 'createdAt'> | null = null;
 
     const where: FindOptionsWhere<ConversationEvent> = {
@@ -86,8 +93,18 @@ export const ConversationEventRepository = AppDataSource.getRepository(Conversat
       });
     }
 
-    if (cursorEvent) {
-      where.createdAt = LessThan(cursorEvent?.createdAt);
+    if (lastDeletedAt && cursorEvent) {
+      where.createdAt = Raw(
+        (column) => `${column} > :lastDeletedAt AND ${column} < :cursorCreatedAt`,
+        {
+          lastDeletedAt,
+          cursorCreatedAt: cursorEvent.createdAt,
+        }
+      );
+    } else if (cursorEvent) {
+      where.createdAt = LessThan(cursorEvent.createdAt);
+    } else if (lastDeletedAt) {
+      where.createdAt = MoreThan(lastDeletedAt);
     }
 
     return this.find({
