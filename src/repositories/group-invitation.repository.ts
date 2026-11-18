@@ -48,7 +48,7 @@ export const GroupInvitationRepository = AppDataSource.getRepository(GroupInvita
         targetId,
       },
       {
-        status: GroupInvitationStatus.ACCEPTED,
+        status: GroupInvitationStatus.EXPIRED,
       }
     );
   },

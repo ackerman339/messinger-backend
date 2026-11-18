@@ -26,6 +26,7 @@ export async function inviteGroupMemberHandler({
     sendMessage(invitedConnection, {
       type: WS_SERVER_EVENTS.GROUP_INVITATION,
       data: {
+        invitationId: conversation.invitationId,
         conversationId: conversation.id,
         groupName: conversation.name,
         invitedBy: actorId,

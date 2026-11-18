@@ -4,7 +4,7 @@ import { env } from '@config/environment';
 
 export const CreateGroupSchema = z.object({
   name: z.string().min(1).max(100),
-  members: z.array(z.uuid()),
+  members: z.array(z.uuid()).default([]),
 });
 
 export const LeaveGroupSchema = z.object({

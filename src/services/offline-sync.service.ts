@@ -77,6 +77,7 @@ class OfflineSyncService {
         status: GroupInvitationStatus.PENDING,
         expiresAt: MoreThan(new Date()),
       },
+      relations: { conversation: true },
     });
 
     if (invitations.length === 0) {
@@ -96,6 +97,8 @@ class OfflineSyncService {
           data: {
             invitationId: invitation.id,
             conversationId: invitation.conversationId,
+            groupName: invitation.conversation.name,
+            invitedBy: invitation.actorId,
           },
         });
       }

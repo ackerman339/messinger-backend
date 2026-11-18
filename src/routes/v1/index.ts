@@ -119,8 +119,8 @@ router.get(
 
 router.post(
   '/conversation/leave-group',
-  authorize(UserRole.USER),
   authenticate,
+  authorize(UserRole.USER),
   validateDTO(LeaveGroupSchema),
   leaveGroup
 );

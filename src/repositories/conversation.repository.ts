@@ -113,8 +113,13 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
         'conversation.createdAt',
         'conversation.updatedAt',
       ])
-      .leftJoin('conversation.members', 'members')
-      .addSelect(['members.conversationId', 'members.unreadCount'])
+      .leftJoin('conversation.members', 'members', 'members.softDeletedAt IS NULL')
+      .addSelect([
+        'members.conversationId',
+        'members.unreadCount',
+        'members.role',
+        'members.softDeletedAt',
+      ])
       .leftJoin('members.user', 'user')
       .addSelect(['user.id', 'user.username', 'user.lastSeenAt'])
       .whereInIds(conversationIds)

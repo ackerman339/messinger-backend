@@ -27,11 +27,12 @@ function getErrorInfo(error: unknown) {
 /**
  * Sends a standardized error message through a WebSocket connection.
  */
-export function sendError(connection: Connection, error: unknown): void {
+export function sendError(connection: Connection, error: unknown, requestId?: string): void {
   const data = getErrorInfo(error);
 
   sendMessage(connection, {
     type: WS_SERVER_EVENTS.ERROR,
+    ...(requestId ? { requestId } : {}),
     data,
   });
 }

@@ -237,6 +237,10 @@ class MessageService {
   ) {
     const member = await ConversationMemberRepository.findMember(conversationId, userId);
 
+    if (!member || member.softDeletedAt) {
+      throw new ForbiddenException('CONVERSATION:USER_NOT_MEMBER');
+    }
+
     const [messages, events] = await Promise.all([
       MessageRepository.findByConversation({
         conversationId,

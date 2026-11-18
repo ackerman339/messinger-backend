@@ -5,6 +5,11 @@ import { sendMessage } from '@websocket/send-message';
 import { groupEvents } from './group-events';
 
 export function registerGroupListeners() {
+  groupEvents.on(ConversationEventType.MEMBER_INVITED, ({ targetUserId, ...data }) => {
+    for (const connection of connectionManager.getUserConnections(targetUserId)) {
+      sendMessage(connection, { type: WS_SERVER_EVENTS.GROUP_INVITATION, data });
+    }
+  });
   groupEvents.on(
     ConversationEventType.MEMBER_JOINED,
     async ({ conversationId, userId, members }) => {
@@ -89,7 +94,7 @@ export function registerGroupListeners() {
   );
 
   groupEvents.on(ConversationEventType.GROUP_DELETED, ({ conversationId, members }) => {
-    for (const userId of members) {
+    for (const { userId } of members) {
       const connections = connectionManager.getUserConnections(userId);
 
       for (const connection of connections) {

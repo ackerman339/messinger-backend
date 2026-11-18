@@ -1,10 +1,15 @@
 import { addHours, isAfter } from 'date-fns';
 import { AppDataSource } from '@config/database';
 import { createHash } from 'node:crypto';
-import { ConversationType, ConversationRole, ConversationEventType } from '@appTypes';
+import {
+  ConversationType,
+  ConversationRole,
+  ConversationEventType,
+  GroupInvitationStatus,
+} from '@appTypes';
 import { ForbiddenException, NotFoundException } from '@exceptions';
 import { groupEvents } from '@events';
-import { Conversation } from '@entities';
+import { Conversation, ConversationMember, GroupInvitation } from '@entities';
 import { messageService } from '@services';
 import { paginate } from '@utils';
 
@@ -136,160 +141,172 @@ class ConversationService {
     });
   }
 
-  async createGroup(ownerId: string, { name }: CreateGroupDto) {
-    return AppDataSource.transaction(async (manager) => {
-      const conversation = ConversationRepository.create({
-        type: ConversationType.GROUP,
-        name,
-      });
-
-      const savedConversation = await ConversationRepository.saveConversation(
-        conversation,
+  async createGroup(ownerId: string, { name, members }: CreateGroupDto) {
+    const result = await AppDataSource.transaction(async (manager) => {
+      const conversation = await ConversationRepository.saveConversation(
+        ConversationRepository.create({ type: ConversationType.GROUP, name }),
         manager
       );
-
       await ConversationMemberRepository.bulkCreate(
-        [
-          {
-            userId: ownerId,
-            conversationId: savedConversation.id,
-            role: ConversationRole.OWNER,
-          },
-        ],
+        [{ userId: ownerId, conversationId: conversation.id, role: ConversationRole.OWNER }],
         manager
       );
       await ConversationEventRepository.createEvent(
-        {
-          conversationId: savedConversation.id,
-          actorId: ownerId,
-        },
+        { conversationId: conversation.id, actorId: ownerId },
         manager
       );
-
-      return savedConversation;
+      const invitations = [];
+      for (const targetId of new Set(members ?? [])) {
+        if (targetId === ownerId) continue;
+        invitations.push(
+          await GroupInvitationRepository.createInvitation(
+            {
+              conversationId: conversation.id,
+              actorId: ownerId,
+              targetId,
+              expiresAt: addHours(new Date(), 24),
+            },
+            manager
+          )
+        );
+      }
+      return { conversation, invitations };
     });
+    for (const invitation of result.invitations) {
+      groupEvents.emit(ConversationEventType.MEMBER_INVITED, {
+        targetUserId: invitation.targetId,
+        invitationId: invitation.id,
+        conversationId: result.conversation.id,
+        groupName: result.conversation.name,
+        invitedBy: ownerId,
+      });
+    }
+    return result.conversation;
   }
 
   async validateGroupInvitation(
     actorId: string,
     { conversationId, targetUserId }: InviteGroupMemberDto
   ) {
-    const [conversation, actor, alreadyMember] = await Promise.all([
-      ConversationRepository.findById(conversationId),
-      ConversationMemberRepository.findMember(conversationId, actorId),
-      ConversationMemberRepository.exists(conversationId, targetUserId),
-    ]);
-
-    if (!conversation) {
-      throw new NotFoundException('GROUP_INVITATION:CONVERSATION_NOT_FOUND');
-    }
-
-    if (conversation.type !== ConversationType.GROUP) {
-      throw new ForbiddenException('GROUP_INVITATION:INVALID_CONVERSATION_TYPE');
-    }
-
-    if (!actor) {
-      throw new ForbiddenException('GROUP_INVITATION:USER_IS_NOT_MEMBER');
-    }
-
-    if (actor.role !== ConversationRole.OWNER) {
-      throw new ForbiddenException('GROUP_INVITATION:ONLY_OWNER_CAN_INVITE');
-    }
-
-    if (actorId === targetUserId) {
-      throw new ForbiddenException('GROUP_INVITATION:CANNOT_INVITE_YOURSELF');
-    }
-
-    if (alreadyMember) {
-      throw new ForbiddenException('GROUP_INVITATION:USER_ALREADY_MEMBER');
-    }
-
-    await GroupInvitationRepository.createInvitation({
-      conversationId,
-      actorId,
-      targetId: targetUserId,
-      expiresAt: addHours(new Date(), 24),
+    return AppDataSource.transaction(async (manager) => {
+      const conversation = await manager.getRepository(Conversation).findOne({
+        where: { id: conversationId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!conversation) throw new NotFoundException('GROUP_INVITATION:CONVERSATION_NOT_FOUND');
+      if (conversation.type !== ConversationType.GROUP) {
+        throw new ForbiddenException('GROUP_INVITATION:INVALID_CONVERSATION_TYPE');
+      }
+      const repository = manager.getRepository(ConversationMember);
+      const actor = await repository.findOne({ where: { conversationId, userId: actorId } });
+      if (!actor || actor.softDeletedAt) {
+        throw new ForbiddenException('GROUP_INVITATION:USER_IS_NOT_MEMBER');
+      }
+      if (actor.role !== ConversationRole.OWNER) {
+        throw new ForbiddenException('GROUP_INVITATION:ONLY_OWNER_CAN_INVITE');
+      }
+      if (actorId === targetUserId)
+        throw new ForbiddenException('GROUP_INVITATION:CANNOT_INVITE_YOURSELF');
+      const target = await repository.findOne({ where: { conversationId, userId: targetUserId } });
+      if (target && !target.softDeletedAt) {
+        throw new ForbiddenException('GROUP_INVITATION:USER_ALREADY_MEMBER');
+      }
+      const invitations = manager.getRepository(GroupInvitation);
+      const pending = await invitations.findOne({
+        where: { conversationId, targetId: targetUserId, status: GroupInvitationStatus.PENDING },
+        order: { createdAt: 'DESC', id: 'DESC' },
+      });
+      if (pending && !isAfter(new Date(), pending.expiresAt)) {
+        return { ...conversation, invitationId: pending.id };
+      }
+      await invitations.update(
+        { conversationId, targetId: targetUserId, status: GroupInvitationStatus.PENDING },
+        { status: GroupInvitationStatus.EXPIRED }
+      );
+      const invitation = await GroupInvitationRepository.createInvitation(
+        {
+          conversationId,
+          actorId,
+          targetId: targetUserId,
+          expiresAt: addHours(new Date(), 24),
+        },
+        manager
+      );
+      return { ...conversation, invitationId: invitation.id };
     });
-
-    return conversation;
   }
 
-  async acceptGroupInvitation(conversationId: string, userId: string) {
-    const [conversation, member, members, invitation] = await Promise.all([
-      ConversationRepository.findById(conversationId),
-      ConversationMemberRepository.findMember(conversationId, userId),
-      ConversationRepository.getConversationMembers(conversationId),
-      GroupInvitationRepository.findOne({ where: { conversationId, targetId: userId } }),
-    ]);
-
-    if (!conversation) {
-      throw new NotFoundException('GROUP:NOT_FOUND');
-    }
-
-    if (!invitation) {
-      throw new NotFoundException('GROUP_INVITATION:NOT_FOUND');
-    }
-
-    if (isAfter(new Date(), invitation.expiresAt)) {
-      await GroupInvitationRepository.markInvitationAsExpired(conversationId, userId);
-      throw new ForbiddenException('GROUP_INVITATION:EXPIRED');
-    }
-
-    await AppDataSource.transaction(async (manager) => {
-      if (member?.softDeletedAt) {
+  private async respondToGroupInvitation(conversationId: string, userId: string, accept: boolean) {
+    const result = await AppDataSource.transaction(async (manager) => {
+      const conversation = await manager.getRepository(Conversation).findOne({
+        where: { id: conversationId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!conversation || conversation.type !== ConversationType.GROUP) {
+        throw new NotFoundException('GROUP:NOT_FOUND');
+      }
+      const invitations = manager.getRepository(GroupInvitation);
+      const invitation = await invitations.findOne({
+        where: { conversationId, targetId: userId, status: GroupInvitationStatus.PENDING },
+        order: { createdAt: 'DESC', id: 'DESC' },
+      });
+      if (!invitation) throw new NotFoundException('GROUP_INVITATION:NOT_FOUND');
+      if (isAfter(new Date(), invitation.expiresAt)) {
+        await invitations.update(
+          { conversationId, targetId: userId, status: GroupInvitationStatus.PENDING },
+          { status: GroupInvitationStatus.EXPIRED }
+        );
+        return { expired: true, members: [] };
+      }
+      await invitations.update(
+        { conversationId, targetId: userId, status: GroupInvitationStatus.PENDING },
+        { status: accept ? GroupInvitationStatus.ACCEPTED : GroupInvitationStatus.REJECTED }
+      );
+      if (!accept) return { expired: false, members: [] };
+      const member = await manager.getRepository(ConversationMember).findOne({
+        where: { conversationId, userId },
+      });
+      if (member && !member.softDeletedAt) {
+        throw new ForbiddenException('GROUP_INVITATION:USER_ALREADY_MEMBER');
+      }
+      if (member) {
         await ConversationMemberRepository.restoreConversation(conversationId, userId, manager);
       } else {
-        await GroupInvitationRepository.acceptInvitation(conversationId, userId, manager);
-
-        await ConversationEventRepository.createEvent(
-          {
-            conversationId,
-            actorId: userId,
-            type: ConversationEventType.MEMBER_JOINED,
-          },
-          manager
-        );
-
         await ConversationMemberRepository.bulkCreate(
-          [
-            {
-              conversationId,
-              userId,
-              role: ConversationRole.MEMBER,
-            },
-          ],
+          [{ conversationId, userId, role: ConversationRole.MEMBER }],
           manager
         );
       }
+      await ConversationEventRepository.createEvent(
+        { conversationId, actorId: userId, type: ConversationEventType.MEMBER_JOINED },
+        manager
+      );
+      const members = await ConversationMemberRepository.getMembers(conversationId, manager);
+      return { expired: false, members };
     });
+    if (result.expired) throw new ForbiddenException('GROUP_INVITATION:EXPIRED');
+    return { members: result.members };
+  }
 
-    return { members };
+  async acceptGroupInvitation(conversationId: string, userId: string) {
+    return this.respondToGroupInvitation(conversationId, userId, true);
   }
 
   async rejectGroupInvitation(conversationId: string, userId: string) {
-    const invitation = await GroupInvitationRepository.findOne({
-      where: { conversationId, targetId: userId },
-    });
-
-    if (!invitation) {
-      throw new NotFoundException('GROUP_INVITATION:NOT_FOUND');
-    }
-
-    if (isAfter(new Date(), invitation.expiresAt)) {
-      await GroupInvitationRepository.markInvitationAsExpired(conversationId, userId);
-      throw new ForbiddenException('GROUP_INVITATION:EXPIRED');
-    }
-
-    await GroupInvitationRepository.rejectInvitation(conversationId, userId);
+    await this.respondToGroupInvitation(conversationId, userId, false);
   }
 
   async leaveGroup(userId: string, conversationId: string) {
+    const conversation = await ConversationRepository.findById(conversationId);
+    if (!conversation || conversation.type !== ConversationType.GROUP) {
+      throw new NotFoundException('GROUP:NOT_FOUND');
+    }
     const [members, member] = await Promise.all([
-      ConversationRepository.getConversationMembers(conversationId),
+      ConversationMemberRepository.getMembers(conversationId),
       ConversationMemberRepository.findMember(conversationId, userId),
     ]);
 
-    if (!member) {
+    if (!member || member.softDeletedAt) {
       throw new ForbiddenException('GROUP:USER_NOT_MEMBER');
     }
 
@@ -315,6 +332,10 @@ class ConversationService {
     prevOwner: string,
     { conversationId, newOwnerId }: TransferOwnershipDto
   ) {
+    const conversation = await ConversationRepository.findById(conversationId);
+    if (!conversation || conversation.type !== ConversationType.GROUP) {
+      throw new NotFoundException('GROUP:NOT_FOUND');
+    }
     if (prevOwner === newOwnerId) {
       throw new ForbiddenException('GROUP:INVALID_OWNER');
     }
@@ -322,7 +343,7 @@ class ConversationService {
     const [owner, newOwner, members] = await Promise.all([
       ConversationMemberRepository.findMember(conversationId, prevOwner),
       ConversationMemberRepository.findMember(conversationId, newOwnerId),
-      ConversationRepository.getConversationMembers(conversationId),
+      ConversationMemberRepository.getMembers(conversationId),
     ]);
 
     if (!owner) {
@@ -382,7 +403,7 @@ class ConversationService {
   async removeGroupMember(userId: string, { conversationId, targetUserId }: RemoveMemberDto) {
     const [conversation, members, actor, targetUser] = await Promise.all([
       ConversationRepository.findById(conversationId),
-      ConversationRepository.getConversationMembers(conversationId),
+      ConversationMemberRepository.getMembers(conversationId),
       ConversationMemberRepository.findMember(conversationId, userId),
       ConversationMemberRepository.findMember(conversationId, targetUserId),
     ]);
@@ -395,7 +416,7 @@ class ConversationService {
       throw new ForbiddenException('REMOVE_MEMBER:NOT_A_GROUP');
     }
 
-    if (!actor) {
+    if (!actor || actor.softDeletedAt) {
       throw new ForbiddenException('REMOVE_MEMBER:NOT_GROUP_MEMBER');
     }
 
@@ -403,7 +424,7 @@ class ConversationService {
       throw new ForbiddenException('REMOVE_MEMBER:ONLY_OWNER');
     }
 
-    if (!targetUser) {
+    if (!targetUser || targetUser.softDeletedAt) {
       throw new NotFoundException('REMOVE_MEMBER:TARGET_NOT_FOUND');
     }
 
@@ -434,7 +455,7 @@ class ConversationService {
     const [conversation, owner, members] = await Promise.all([
       ConversationRepository.findById(conversationId),
       ConversationMemberRepository.findMember(conversationId, userId),
-      ConversationRepository.getConversationMembers(conversationId),
+      ConversationMemberRepository.getMembers(conversationId),
     ]);
 
     if (!conversation) {
@@ -445,7 +466,7 @@ class ConversationService {
       throw new ForbiddenException('GROUP:INVALID_TYPE');
     }
 
-    if (!owner) {
+    if (!owner || owner.softDeletedAt) {
       throw new ForbiddenException('GROUP:USER_NOT_MEMBER');
     }
 
@@ -526,6 +547,8 @@ class ConversationService {
             username: member.user.username,
             lastSeenAt: member.user.lastSeenAt,
             unreadCount: member.unreadCount,
+            role: member.role,
+            softDeletedAt: member.softDeletedAt,
           })),
         };
       })
