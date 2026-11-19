@@ -226,6 +226,8 @@ class MessageService {
       return {
         savedMessage: { id, createdAt, senderId, conversationId, content, savedAttachments },
         members,
+        groupName: conversation.name,
+        senderName: member.user.username,
       };
     });
   }

@@ -194,6 +194,127 @@ test('group deletion notifies each member by user ID', () => {
   });
   assert.deepEqual(sent, ['one', 'two']);
 });
+
+function groupMessageFixture({ groupName = 'Equipo', persistenceError } = {}) {
+  const zod = require('zod');
+  const { WebSocket } = require('ws');
+  const { GroupMessageSchema } = load('dtos/websocket/message.dto', { zod });
+  const { PushNotificationSchema } = load('dtos/push-notification', { zod });
+  const conversationId = crypto.randomUUID();
+  const messageId = crypto.randomUUID();
+  const sent = [];
+  const pushes = [];
+  const members = ['sender', 'online', 'offline', 'closing'].map((userId) => ({ userId }));
+  const openConnections = [
+    { id: 'web', socket: { readyState: WebSocket.OPEN } },
+    { id: 'mobile', socket: { readyState: WebSocket.OPEN } },
+  ];
+  const connections = {
+    online: openConnections,
+    closing: [{ id: 'closing', socket: { readyState: WebSocket.CLOSING } }],
+  };
+  const { groupMessageHandler } = load('websocket/handlers/group-message', {
+    ws: { WebSocket },
+    '@constants': {
+      WS_SERVER_EVENTS: { NEW_MESSAGE: 'NEW_MESSAGE', MESSAGE_SENT: 'MESSAGE_SENT' },
+    },
+    '@dtos': { GroupMessageSchema },
+    '@services': {
+      messageService: {
+        async createGroupMessage(_senderId, { content, attachments }) {
+          if (persistenceError) throw persistenceError;
+
+          return {
+            savedMessage: {
+              id: messageId,
+              content,
+              createdAt: new Date(),
+              savedAttachments: attachments,
+            },
+            members,
+            groupName,
+            senderName: 'Ana',
+          };
+        },
+      },
+      pushNotificationService: {
+        sendToUser(userId, payload) {
+          pushes.push({ userId, payload: PushNotificationSchema.parse(payload) });
+          // Keep push delivery pending to verify independent WebSocket confirmation.
+          return new Promise(() => {});
+        },
+      },
+    },
+    '../authenticate-guard': { requireAuthentication: () => {} },
+    '../managers/connection-manager': {
+      connectionManager: { getUserConnections: (userId) => connections[userId] ?? [] },
+    },
+    '../send-message': { sendMessage: (connection, event) => sent.push({ connection, event }) },
+  });
+  return {
+    conversationId,
+    messageId,
+    sent,
+    pushes,
+    send: (content, attachments) =>
+      groupMessageHandler({
+        connection: { id: 'sender', userId: 'sender' },
+        message: { data: { conversationId, content, attachments } },
+      }),
+  };
+}
+
+test('group messages reach open sockets and notify offline members after saving', async () => {
+  const f = groupMessageFixture();
+  const content = '🙂'.repeat(201);
+  await f.send(content);
+
+  assert.deepEqual(
+    f.sent.map(({ connection, event }) => [connection.id, event.type, event.data.content]),
+    [
+      ['web', 'NEW_MESSAGE', content],
+      ['mobile', 'NEW_MESSAGE', content],
+      ['sender', 'MESSAGE_SENT', content],
+    ]
+  );
+  assert.deepEqual(
+    f.pushes.map(({ userId }) => userId),
+    ['offline', 'closing']
+  );
+  for (const { payload } of f.pushes) {
+    assert.equal(payload.title, 'Equipo');
+    assert.equal(payload.body, `Ana: ${'🙂'.repeat(200)}…`);
+    assert.deepEqual(payload.data, {
+      type: 'message',
+      conversationId: f.conversationId,
+      messageId: f.messageId,
+    });
+  }
+});
+
+test('group notifications fall back to an attachment preview and a default title', async () => {
+  const f = groupMessageFixture({ groupName: null });
+  await f.send(' ', [
+    {
+      id: crypto.randomUUID(),
+      storageKey: 'photo.png',
+      fileName: 'photo.png',
+      contentType: 'image/png',
+      size: 1,
+    },
+  ]);
+
+  assert.equal(f.pushes[0].payload.title, 'Grupo');
+  assert.equal(f.pushes[0].payload.body, 'Ana: Archivo adjunto');
+});
+
+test('group messages send no notifications when persistence fails', async () => {
+  const f = groupMessageFixture({ persistenceError: new Error('save failed') });
+  await assert.rejects(f.send('Hola'), /save failed/);
+  assert.deepEqual(f.sent, []);
+  assert.deepEqual(f.pushes, []);
+});
+
 function dispatcherFixture() {
   const sent = [],
     errors = [];
