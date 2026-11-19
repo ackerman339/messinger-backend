@@ -5,6 +5,9 @@ import { logger } from './logger';
 // Helper to parse comma-separated strings into arrays
 const commaSeparated = z.string().transform((val) => val.split(',').map((s) => s.trim()));
 
+const optionalLiveKitValue = <T extends z.ZodType<string>>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+
 const booleanString = z
   .string()
   .transform((val) => val === 'true')
@@ -21,125 +24,144 @@ dotenv.config({
   path: ENVS[(process.env.NODE_ENV || 'development') as keyof typeof ENVS],
 });
 
-const envSchema = z.object({
-  // Environment
-  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
+const envSchema = z
+  .object({
+    // Environment
+    NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
-  // Project
-  PROJECT_NAME: z.string().min(1),
+    // Project
+    PROJECT_NAME: z.string().min(1),
 
-  // Server
-  PORT: z.coerce.number().int().positive(),
-  API_PREFIX: z.string(),
-  API_VERSION: z.string(),
+    // Server
+    PORT: z.coerce.number().int().positive(),
+    API_PREFIX: z.string(),
+    API_VERSION: z.string(),
 
-  // Database
-  DB_HOST: z.string().min(1),
-  DB_PORT: z.coerce.number().int().positive(),
-  DB_USER: z.string().min(1),
-  DB_PASSWORD: z.string().min(1),
-  DB_NAME: z.string().min(1),
-  DB_TEST_NAME: z.string().min(1),
+    // Database
+    DB_HOST: z.string().min(1),
+    DB_PORT: z.coerce.number().int().positive(),
+    DB_USER: z.string().min(1),
+    DB_PASSWORD: z.string().min(1),
+    DB_NAME: z.string().min(1),
+    DB_TEST_NAME: z.string().min(1),
 
-  // JWT
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-  JWT_EXPIRES_IN: z.string().regex(/^\d+[smhd]$/, 'Invalid format, e.g: 24h, 7d, 60s'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
-  JWT_REFRESH_EXPIRES_IN: z.string().regex(/^\d+[smhd]$/, 'Invalid format, e.g: 24h, 7d, 60s'),
+    // JWT
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    JWT_EXPIRES_IN: z.string().regex(/^\d+[smhd]$/, 'Invalid format, e.g: 24h, 7d, 60s'),
+    JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
+    JWT_REFRESH_EXPIRES_IN: z.string().regex(/^\d+[smhd]$/, 'Invalid format, e.g: 24h, 7d, 60s'),
 
-  // Cookie Config
-  COOKIE_HTTP_ONLY: booleanString,
-  COOKIE_SECURE: booleanString,
-  COOKIE_DOMAIN: z.string(),
-  COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']),
-  ACCESS_COOKIE_MAX_AGE: z.coerce.number().int().positive(),
-  REFRESH_COOKIE_MAX_AGE: z.coerce.number().int().positive(),
+    // Cookie Config
+    COOKIE_HTTP_ONLY: booleanString,
+    COOKIE_SECURE: booleanString,
+    COOKIE_DOMAIN: z.string(),
+    COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']),
+    ACCESS_COOKIE_MAX_AGE: z.coerce.number().int().positive(),
+    REFRESH_COOKIE_MAX_AGE: z.coerce.number().int().positive(),
 
-  // CORS
-  CORS_ORIGIN: commaSeparated,
-  CORS_CREDENTIALS: booleanString,
-  CORS_METHODS: commaSeparated,
-  CORS_ALLOWED_HEADERS: commaSeparated,
-  CORS_EXPOSED_HEADERS: commaSeparated,
+    // CORS
+    CORS_ORIGIN: commaSeparated,
+    CORS_CREDENTIALS: booleanString,
+    CORS_METHODS: commaSeparated,
+    CORS_ALLOWED_HEADERS: commaSeparated,
+    CORS_EXPOSED_HEADERS: commaSeparated,
 
-  // Hashing
-  SALT_ROUNDS: z.coerce.number().int().positive(),
+    // Hashing
+    SALT_ROUNDS: z.coerce.number().int().positive(),
 
-  // HMAC
-  LOGIN_KEY_SECRET: z
-    .string()
-    .length(128, 'LOGIN_KEY_SECRET must be 128 hex characters (64 bytes) for HMAC signing')
-    .regex(/^[0-9a-f]+$/i, 'LOGIN_KEY_SECRET must be a valid hexadecimal string'),
+    // HMAC
+    LOGIN_KEY_SECRET: z
+      .string()
+      .length(128, 'LOGIN_KEY_SECRET must be 128 hex characters (64 bytes) for HMAC signing')
+      .regex(/^[0-9a-f]+$/i, 'LOGIN_KEY_SECRET must be a valid hexadecimal string'),
 
-  //Message encryption
-  MESSAGE_ENCRYPTION_KEY: z
-    .string()
-    .regex(
-      /^[0-9a-fA-F]{64}$/,
-      'APP_ENCRYPTION_KEY must be a 64-character hexadecimal string (32 bytes)'
-    )
-    .transform((value) => Buffer.from(value, 'hex')),
+    //Message encryption
+    MESSAGE_ENCRYPTION_KEY: z
+      .string()
+      .regex(
+        /^[0-9a-fA-F]{64}$/,
+        'APP_ENCRYPTION_KEY must be a 64-character hexadecimal string (32 bytes)'
+      )
+      .transform((value) => Buffer.from(value, 'hex')),
 
-  // Pagination
-  DEFAULT_PAGE_SIZE: z.coerce.number().int().positive(),
-  MAX_PAGE_SIZE: z.coerce.number().int().positive(),
+    // Pagination
+    DEFAULT_PAGE_SIZE: z.coerce.number().int().positive(),
+    MAX_PAGE_SIZE: z.coerce.number().int().positive(),
 
-  // Logging
-  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).optional(),
-  LOG_FILE_ERROR: z.string().optional(),
-  LOG_FILE_COMBINED: z.string().optional(),
-  LOG_FILE_ACCESS: z.string().optional(),
+    // Logging
+    LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).optional(),
+    LOG_FILE_ERROR: z.string().optional(),
+    LOG_FILE_COMBINED: z.string().optional(),
+    LOG_FILE_ACCESS: z.string().optional(),
 
-  // File Upload
-  MAX_FILE_SIZE: z.coerce.number().int().positive().optional(),
-  ALLOWED_FILE_TYPES: commaSeparated.optional(),
+    // File Upload
+    MAX_FILE_SIZE: z.coerce.number().int().positive().optional(),
+    ALLOWED_FILE_TYPES: commaSeparated.optional(),
 
-  // Rate Limiting
-  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().optional(),
-  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().optional(),
+    // Rate Limiting
+    RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().optional(),
+    RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().optional(),
 
-  // Feature Flags
-  ENABLE_SWAGGER: booleanString.optional(),
-  ENABLE_RATE_LIMITING: booleanString.optional(),
-  ENABLE_CACHING: booleanString.optional(),
-  ENABLE_AUDIT_LOG: booleanString.optional(),
+    // Feature Flags
+    ENABLE_SWAGGER: booleanString.optional(),
+    ENABLE_RATE_LIMITING: booleanString.optional(),
+    ENABLE_CACHING: booleanString.optional(),
+    ENABLE_AUDIT_LOG: booleanString.optional(),
 
-  // R2
-  R2_ACCOUNT_ID: z.string().min(1),
-  R2_ACCESS_KEY_ID: z.string().min(1),
-  R2_SECRET_ACCESS_KEY: z.string().min(1),
-  R2_BUCKET_NAME: z.string().min(1),
+    // R2
+    R2_ACCOUNT_ID: z.string().min(1),
+    R2_ACCESS_KEY_ID: z.string().min(1),
+    R2_SECRET_ACCESS_KEY: z.string().min(1),
+    R2_BUCKET_NAME: z.string().min(1),
 
-  // Optional when Expo push security is enabled in the Expo dashboard.
-  EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+    // Optional when Expo push security is enabled in the Expo dashboard.
+    EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
 
-  // Webpush
-  VAPID_PUBLIC_KEY: z.string().min(1),
-  VAPID_PRIVATE_KEY: z.string().min(1),
-  VAPID_SUBJECT: z
-    .string()
-    .refine(
-      (value) => value.startsWith('mailto:') || value.startsWith('https://'),
-      'VAPID_SUBJECT must be a mailto: or https:// URI'
-    ),
+    // Webpush
+    VAPID_PUBLIC_KEY: z.string().min(1),
+    VAPID_PRIVATE_KEY: z.string().min(1),
+    VAPID_SUBJECT: z
+      .string()
+      .refine(
+        (value) => value.startsWith('mailto:') || value.startsWith('https://'),
+        'VAPID_SUBJECT must be a mailto: or https:// URI'
+      ),
 
-  // Admin Seed
-  ADMIN_NAME: z.string().min(2).max(100),
-  ADMIN_PASSWORD: z
-    .string()
-    .min(8)
-    .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Must contain at least one number')
-    .regex(/[!@#$%^&*]/, 'Must contain at least one special character'),
+    // Admin Seed
+    ADMIN_NAME: z.string().min(2).max(100),
+    ADMIN_PASSWORD: z
+      .string()
+      .min(8)
+      .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+      .regex(/[a-z]/, 'Must contain at least one lowercase letter')
+      .regex(/[0-9]/, 'Must contain at least one number')
+      .regex(/[!@#$%^&*]/, 'Must contain at least one special character'),
 
-  // Coturn config
-  TURN_HOST: z.string().min(1),
-  TURN_PORT: z.coerce.number().int().min(1).max(65535).default(3478),
-  TURN_TTL: z.coerce.number().int().positive().default(3600),
-  TURN_SECRET: z.string().min(1),
-  TURN_PUBLIC_IP: z.string().min(1).optional(),
-});
+    // LiveKit runs independently from the existing peer-to-peer calls.
+    LIVEKIT_API_URL: optionalLiveKitValue(z.url({ protocol: /^https?$/ })),
+    LIVEKIT_WS_URL: optionalLiveKitValue(z.url({ protocol: /^wss?$/ })),
+    LIVEKIT_API_KEY: optionalLiveKitValue(z.string().min(1)),
+    LIVEKIT_API_SECRET: optionalLiveKitValue(z.string().min(1)),
+
+    // Coturn config
+    TURN_HOST: z.string().min(1),
+    TURN_PORT: z.coerce.number().int().min(1).max(65535).default(3478),
+    TURN_TTL: z.coerce.number().int().positive().default(3600),
+    TURN_SECRET: z.string().min(1),
+    TURN_PUBLIC_IP: z.string().min(1).optional(),
+  })
+  .refine(
+    (value) => {
+      const settings = [
+        value.LIVEKIT_API_URL,
+        value.LIVEKIT_WS_URL,
+        value.LIVEKIT_API_KEY,
+        value.LIVEKIT_API_SECRET,
+      ];
+      return settings.every(Boolean) || settings.every((setting) => !setting);
+    },
+    { path: ['LIVEKIT_API_URL'], message: 'Set all four LiveKit connection variables together' }
+  );
 
 export type Env = z.infer<typeof envSchema>;
 

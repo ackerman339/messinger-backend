@@ -405,13 +405,23 @@ test('the expiration job purges deleted calls after lifecycle cleanup', async ()
       },
       callNegotiationService: { expirePending: task('negotiations') },
     },
+    '../services/group-call.service': {
+      groupCallService: { expireRinging: task('group-ringing') },
+    },
     '@websocket/handlers/notify-call-no-answer': {},
     '@websocket/handlers/notify-call-connection-timeout': {},
     '@websocket/handlers/notify-call-negotiation-end': {},
     '@websocket/handlers/notify-call-recovery-timeout': {},
   });
   await tick();
-  assert.deepEqual(operations, ['ringing', 'connecting', 'recovery', 'negotiations', 'purge']);
+  assert.deepEqual(operations, [
+    'ringing',
+    'connecting',
+    'recovery',
+    'negotiations',
+    'purge',
+    'group-ringing',
+  ]);
 });
 
 test('history cursors accept legacy UUIDs and timestamp cursors but reject malformed values', () => {

@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { logger } from '@config/logger';
 import { callService, callNegotiationService } from '@services';
+import { groupCallService } from '../services/group-call.service';
 import { notifyCallNoAnswer } from '@websocket/handlers/notify-call-no-answer';
 import { notifyCallConnectionTimeout } from '@websocket/handlers/notify-call-connection-timeout';
 import { notifyCallNegotiationEnd } from '@websocket/handlers/notify-call-negotiation-end';
@@ -71,6 +72,7 @@ async function expireCalls() {
     await expireRecoveringCalls();
     await expireNegotiations();
     await callService.purgeDeletedHistory();
+    await groupCallService.expireRinging();
   } finally {
     running = false;
   }

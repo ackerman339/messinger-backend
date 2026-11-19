@@ -11,6 +11,7 @@ import { ForbiddenException, NotFoundException } from '@exceptions';
 import { groupEvents } from '@events';
 import { Conversation, ConversationMember, GroupInvitation } from '@entities';
 import { messageService } from '@services';
+import { groupCallService } from './group-call.service';
 import { paginate } from '@utils';
 
 import {
@@ -56,11 +57,21 @@ class ConversationService {
     targetUserId,
     eventType,
   }: RemoveMemberParams) {
-    return AppDataSource.transaction(async (manager) => {
+    const ringingCall = await AppDataSource.transaction(async (manager) => {
+      const conversation = await manager.findOne(Conversation, {
+        where: { id: conversationId, type: ConversationType.GROUP },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!conversation) throw new NotFoundException('GROUP:NOT_FOUND');
       await ConversationMemberRepository.markConversationAsDeleted(
         conversationId,
         targetUserId,
         manager
+      );
+      const ringingCall = await groupCallService.removeGroupMember(
+        manager,
+        conversationId,
+        targetUserId
       );
 
       await ConversationEventRepository.createEvent(
@@ -72,7 +83,9 @@ class ConversationService {
         },
         manager
       );
+      return ringingCall;
     });
+    if (ringingCall) groupCallService.closeRingingNotifications(ringingCall, [targetUserId]);
   }
 
   private normalizeMembers(creatorId: string, members: string[]) {
@@ -367,6 +380,11 @@ class ConversationService {
     }
 
     await AppDataSource.transaction(async (manager) => {
+      const group = await manager.findOne(Conversation, {
+        where: { id: conversationId, type: ConversationType.GROUP },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!group) throw new NotFoundException('GROUP:NOT_FOUND');
       await ConversationMemberRepository.updateRole(
         conversationId,
         prevOwner,
@@ -474,9 +492,17 @@ class ConversationService {
       throw new ForbiddenException('GROUP:ONLY_OWNER');
     }
 
-    await AppDataSource.transaction(async (manager) => {
+    const call = await AppDataSource.transaction(async (manager) => {
+      const current = await manager.findOne(Conversation, {
+        where: { id: conversationId, type: ConversationType.GROUP },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!current) throw new NotFoundException('GROUP:NOT_FOUND');
+      const call = await groupCallService.deleteGroupRoom(manager, conversationId);
       await ConversationRepository.deleteConversation(conversationId, manager);
+      return call;
     });
+    if (call) groupCallService.closeRingingNotifications(call);
 
     groupEvents.emitGroupDeleted({
       conversationId,

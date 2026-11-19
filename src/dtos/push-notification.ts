@@ -18,6 +18,15 @@ export const PushNotificationSchema = z.object({
       media: z.enum(['audio', 'video']).optional(),
       expiresAt: z.iso.datetime().nullable().optional(),
     }),
+    z.object({
+      type: z.enum(['group-call-incoming', 'group-call-missed', 'group-call-closed']),
+      callId: z.uuid(),
+      conversationId: z.uuid(),
+      callerId: z.uuid(),
+      groupName: z.string().min(1).max(100),
+      media: z.enum(['audio', 'video']),
+      expiresAt: z.iso.datetime().nullable(),
+    }),
   ]),
 });
 

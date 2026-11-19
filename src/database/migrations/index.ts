@@ -16,3 +16,5 @@ export * from './1788102779492-EmptyChatMigration';
 export * from './1794004694733-CallsMigration';
 export * from './1794657600000-CallConversationEventsMigration';
 export * from './1794675600000-CallHistoryDeletionMigration';
+export * from './1795000000000-GroupCallsMigration';
+export * from './1795001000000-GroupCallRingingMigration';

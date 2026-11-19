@@ -12,6 +12,11 @@ services:
       - node_modules:/app/node_modules
     env_file:
       - .env
+    environment:
+      LIVEKIT_API_URL: '${LIVEKIT_API_URL:-http://livekit:7880}'
+      LIVEKIT_WS_URL: '${LIVEKIT_WS_URL:-ws://${LIVEKIT_LOCAL_IP:-127.0.0.1}:7880}'
+      LIVEKIT_API_KEY: '${LIVEKIT_API_KEY:-devkey}'
+      LIVEKIT_API_SECRET: '${LIVEKIT_API_SECRET:-secret}'
     depends_on:
       database:
         condition: service_healthy
@@ -64,6 +69,41 @@ services:
       - --static-auth-secret=${TURN_SECRET:?TURN_SECRET is required}
     volumes:
       - ./infrastructure/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    command: ['--dev', '--bind', '0.0.0.0']
+    ports:
+      - '${LIVEKIT_LOCAL_IP:-127.0.0.1}:7880:7880/tcp'
+      - '${LIVEKIT_LOCAL_IP:-127.0.0.1}:7881:7881/tcp'
+      - '${LIVEKIT_LOCAL_IP:-127.0.0.1}:7882:7882/udp'
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: false
+          node_ip: "${LIVEKIT_LOCAL_IP:-127.0.0.1}"
+          stun_servers:
+            - "${LIVEKIT_LOCAL_IP:-127.0.0.1}:3478"
+          turn_servers:
+            - host: "${LIVEKIT_LOCAL_IP:-127.0.0.1}"
+              port: 3478
+              protocol: udp
+              secret: "${TURN_SECRET:?TURN_SECRET is required}"
+            - host: "${LIVEKIT_LOCAL_IP:-127.0.0.1}"
+              port: 3478
+              protocol: tcp
+              secret: "${TURN_SECRET:?TURN_SECRET is required}"
+        room:
+          auto_create: false
+        keys:
+          "${LIVEKIT_API_KEY:-devkey}": "${LIVEKIT_API_SECRET:-secret}"
+        webhook:
+          api_key: "${LIVEKIT_API_KEY:-devkey}"
+          urls:
+            - "http://api:${PORT:-3000}${API_PREFIX-/api}/V1/group-calls/livekit-webhook"
 
 volumes:
   postgres-data:

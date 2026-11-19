@@ -49,5 +49,30 @@ services:
     volumes:
       - ./infrastructure/coturn/turnserver.staging.conf:/etc/coturn/turnserver.conf:ro
 
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    profiles: [livekit]
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      LIVEKIT_KEYS: '${LIVEKIT_KEYS:-}'
+      LIVEKIT_CONFIG: |
+        port: 7880
+        bind_addresses: ['127.0.0.1']
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: false
+          node_ip: "${TURN_PUBLIC_IP:?TURN_PUBLIC_IP is required}"
+          turn_servers:
+            - host: "${TURN_HOST:?TURN_HOST is required}"
+              port: 3478
+              protocol: udp
+              secret: "${TURN_SECRET:?TURN_SECRET is required}"
+            - host: "${TURN_HOST:?TURN_HOST is required}"
+              port: 3478
+              protocol: tcp
+              secret: "${TURN_SECRET:?TURN_SECRET is required}"
+
 volumes:
   postgres-data:

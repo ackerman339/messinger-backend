@@ -78,16 +78,31 @@ class MobilePushService {
   }
 
   async send(token: string, payload: PushNotificationPayload, options?: MobilePushOptions) {
-    const incomingCall = payload.data.type === 'call-incoming' && options?.platform !== 'IOS';
+    const groupIncoming = payload.data.type === 'group-call-incoming';
+    const closed = payload.data.type === 'group-call-closed';
+    const android = options?.platform !== 'IOS';
+    const incomingCall = android && (payload.data.type === 'call-incoming' || groupIncoming);
+    const priority = closed && !android ? 'normal' : (options?.priority ?? 'high');
+    const presentation =
+      incomingCall || closed
+        ? { _contentAvailable: true }
+        : {
+            title: payload.title,
+            body: payload.body,
+            sound: groupIncoming ? 'pulse_incoming_call.wav' : 'default',
+            channelId: 'messages',
+            ...(groupIncoming ? { categoryId: 'messingerIncomingCall' } : {}),
+          };
     const result = (await this.request({
       to: token,
       data: { ...payload.data, recipientId: options?.recipientId },
       // Android calls are presented by the native FCM receiver before Expo starts JS.
-      ...(incomingCall
-        ? { _contentAvailable: true }
-        : { title: payload.title, body: payload.body, sound: 'default', channelId: 'messages' }),
+      ...presentation,
+      ...(payload.data.type.startsWith('group-call-') && 'callId' in payload.data
+        ? { collapseId: payload.data.callId }
+        : {}),
       ttl: options?.ttl,
-      priority: incomingCall ? 'high' : (options?.priority ?? 'high'),
+      priority: incomingCall ? 'high' : priority,
     })) as ExpoPushResponse;
 
     if (incomingCall)
