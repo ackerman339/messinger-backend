@@ -1,73 +1,37 @@
-import { In, MoreThan } from 'typeorm';
-import { MessageStatus, GroupInvitationStatus } from '@appTypes';
+import { MoreThan } from 'typeorm';
+import { Connection, MessageStatus, GroupInvitationStatus } from '@appTypes';
 import { WS_SERVER_EVENTS } from '@constants';
 import { connectionManager } from '@websocket/managers/connection-manager';
 import { sendMessage } from '@websocket/send-message';
 import { messageService } from '@services';
-import {
-  GroupInvitationRepository,
-  MessageDeliveryRepository,
-  MessageRepository,
-} from '@repositories';
+import { GroupInvitationRepository, MessageDeliveryRepository } from '@repositories';
 
 class OfflineSyncService {
-  async syncPendingMessages(userId: string) {
+  async syncPendingMessages(userId: string, connection: Connection) {
     const pendingDeliveries = await MessageDeliveryRepository.find({
-      where: {
-        userId,
-        status: MessageStatus.SENT,
-      },
-      order: { createdAt: 'DESC' },
+      where: { userId, status: MessageStatus.SENT },
+      order: { createdAt: 'ASC', id: 'ASC' },
+      relations: { message: { attachments: true, conversation: { members: { user: true } } } },
     });
-
-    if (pendingDeliveries.length === 0) {
-      return;
-    }
-
-    const messageIds = pendingDeliveries.map((delivery) => delivery.messageId);
-    const messages = (
-      await MessageRepository.find({
-        where: { id: In(messageIds) },
-        order: { createdAt: 'DESC' },
-      })
-    ).map((message) => {
-      const { cipheredContent, iv, authTag, ...rest } = message;
-      const content = messageService.decipherMessage(cipheredContent, iv, authTag);
-      return {
-        ...rest,
-        content,
-      };
-    });
-
-    const messagesMap = new Map(messages.map((message) => [message.id, message]));
-    const connections = connectionManager.getUserConnections(userId);
-
-    if (connections.length === 0) {
-      return;
-    }
-
-    for (const delivery of pendingDeliveries) {
-      const message = messagesMap.get(delivery.messageId);
-
-      if (!message) {
+    for (const { message } of pendingDeliveries) {
+      if (!message) continue;
+      const member = message.conversation.members.find((item) => item.userId === userId);
+      if (
+        !member ||
+        member.softDeletedAt ||
+        (member.emptyMessagesAt && message.createdAt <= member.emptyMessagesAt)
+      )
         continue;
-      }
-
-      for (const connection of connections) {
-        sendMessage(connection, {
-          type: WS_SERVER_EVENTS.NEW_MESSAGE,
-          data: message,
-        });
-      }
+      const content = messageService.decipherMessage(
+        message.cipheredContent,
+        message.iv,
+        message.authTag
+      );
+      sendMessage(connection, {
+        type: WS_SERVER_EVENTS.NEW_MESSAGE,
+        data: messageService.serializeMessage({ ...message, content }, message.conversation),
+      });
     }
-
-    await MessageDeliveryRepository.update(
-      {
-        userId,
-        messageId: In(messageIds),
-      },
-      { status: MessageStatus.DELIVERED }
-    );
   }
 
   async syncPendingGroupInvitations(userId: string) {

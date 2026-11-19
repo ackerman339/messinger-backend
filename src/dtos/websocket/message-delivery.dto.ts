@@ -4,7 +4,7 @@ import { MessageStatus } from '@appTypes';
 export const MessageDeliverySchema = z.object({
   conversationId: z.uuid(),
   messageId: z.uuid(),
-  status: z.enum(MessageStatus),
+  status: z.enum([MessageStatus.DELIVERED, MessageStatus.READ]),
 });
 
 export type MessageDeliveryDto = z.infer<typeof MessageDeliverySchema>;

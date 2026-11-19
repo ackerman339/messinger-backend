@@ -1,4 +1,6 @@
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import type { EntityManager } from 'typeorm';
+import { Message } from '@entities';
 import { env } from '@config/environment';
 import { AppDataSource } from '@config/database';
 import { MessageStatus, ConversationType } from '@appTypes';
@@ -55,30 +57,101 @@ class MessageService {
     return decrypted.toString('utf8');
   }
 
+  private async findReplay(manager: EntityManager, senderId: string, clientMessageId?: string) {
+    if (!clientMessageId) return null;
+    // Serialize retries across sockets and server instances before any message side effects.
+    await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+      `${senderId}:${clientMessageId.toLowerCase()}`,
+    ]);
+    return manager.getRepository(Message).findOne({
+      where: { senderId, clientMessageId },
+      relations: { attachments: true, deliveries: true, conversation: { members: { user: true } } },
+    });
+  }
+
+  serializeMessage(
+    message: Pick<Message, 'id' | 'createdAt' | 'senderId' | 'conversationId' | 'attachments'> & {
+      content: string;
+    },
+    conversation?: Message['conversation']
+  ) {
+    const { id, createdAt, senderId, conversationId, content, attachments } = message;
+    const data = {
+      id,
+      messageId: id,
+      senderId,
+      conversationId,
+      createdAt,
+      content,
+      attachments,
+      type: 'MESSAGE' as const,
+    };
+    if (conversation?.type !== ConversationType.PRIVATE) return data;
+
+    return {
+      ...data,
+      conversation: {
+        id: conversation.id,
+        name: conversation.name,
+        type: conversation.type,
+        createdAt: conversation.createdAt,
+        updatedAt: createdAt,
+        messages: [data],
+        messagesCursor: null,
+        lastMessage: data,
+        members: conversation.members.map(({ user, userId, unreadCount, role, softDeletedAt }) => ({
+          userId,
+          username: user.username,
+          lastSeenAt: user.lastSeenAt,
+          unreadCount,
+          role,
+          softDeletedAt,
+        })),
+      },
+    };
+  }
+
   async createPrivateMessage(
     senderId: string,
-    { receiverId, content, attachments }: PrivateMessageDto
+    { receiverId, content, attachments, clientMessageId }: PrivateMessageDto
   ) {
-    const { cipheredContent, iv, authTag } = this.cipherMessage(content);
-    const conversation = await conversationService.getOrCreatePrivateConversation({
-      type: ConversationType.PRIVATE,
-      creatorId: senderId,
-      members: [receiverId],
-    });
+    return AppDataSource.transaction(async (manager) => {
+      const replay = await this.findReplay(manager, senderId, clientMessageId);
+      if (replay) {
+        if (
+          replay.conversation.type !== ConversationType.PRIVATE ||
+          !replay.conversation.members.some((member) => member.userId === receiverId) ||
+          (receiverId === senderId && replay.conversation.members.length !== 1)
+        ) {
+          throw new ForbiddenException('MESSAGE:CLIENT_ID_ALREADY_USED');
+        }
+        return {
+          members: replay.conversation.members,
+          replayed: true,
+          savedMessage: {
+            ...replay,
+            content: this.decipherMessage(replay.cipheredContent, replay.iv, replay.authTag),
+            senderName: undefined,
+          },
+        };
+      }
+      const { cipheredContent, iv, authTag } = this.cipherMessage(content);
+      const conversation = await conversationService.getOrCreatePrivateConversation(
+        {
+          type: ConversationType.PRIVATE,
+          creatorId: senderId,
+          members: [receiverId],
+        },
+        manager
+      );
+      if (!conversation) throw new NotFoundException('CONVERSATION_NOT_FOUND');
+      const members = conversation.members;
+      const sender = members.find((member) => member.userId === senderId);
+      const receiver = members.find((member) => member.userId === receiverId);
 
-    if (!conversation) {
-      throw new NotFoundException('CONVERSATION_NOT_FOUND');
-    }
-
-    const [sender, receiver, members] = await Promise.all([
-      ConversationMemberRepository.findMember(conversation.id, senderId),
-      ConversationMemberRepository.findMember(conversation.id, receiverId),
-      ConversationRepository.getConversationMembers(conversation.id),
-    ]);
-
-    const result = await AppDataSource.transaction(async (manager) => {
       if (sender?.softDeletedAt) {
         await ConversationMemberRepository.restoreConversation(conversation.id, senderId, manager);
+        sender.softDeletedAt = null;
       }
 
       if (receiver?.softDeletedAt) {
@@ -87,11 +160,13 @@ class MessageService {
           receiverId,
           manager
         );
+        receiver.softDeletedAt = null;
       }
 
       const newMessage = MessageRepository.create({
         conversationId: conversation.id,
         senderId,
+        clientMessageId,
         cipheredContent,
         iv,
         authTag,
@@ -132,56 +207,77 @@ class MessageService {
       ]);
 
       const savedAttachments = await MessageAttachmentRepository.findByMessageId(id, manager);
-
       return {
-        id,
-        senderId,
-        conversation,
-        createdAt,
-        content,
-        savedAttachments,
-        senderName: sender?.user.username,
+        members,
+        replayed: false,
+        savedMessage: {
+          id,
+          senderId,
+          conversation,
+          conversationId: conversation.id,
+          createdAt,
+          content,
+          attachments: savedAttachments,
+          deliveries,
+          senderName: sender?.user.username,
+        },
       };
     });
-
-    return {
-      members,
-      savedMessage: result,
-    };
   }
 
   async createGroupMessage(
     senderId: string,
-    { conversationId, content, attachments }: GroupMessageDto
+    { conversationId, content, attachments, clientMessageId }: GroupMessageDto
   ) {
-    const [conversation, member, members] = await Promise.all([
-      ConversationRepository.findById(conversationId),
-      ConversationMemberRepository.findMember(conversationId, senderId),
-      ConversationMemberRepository.getMembers(conversationId),
-    ]);
-
-    if (!conversation) {
-      throw new NotFoundException('GROUP:NOT_FOUND');
-    }
-
-    if (conversation.type !== ConversationType.GROUP) {
-      throw new ForbiddenException('GROUP:INVALID_CONVERSATION_TYPE');
-    }
-
-    if (!member) {
-      throw new ForbiddenException('GROUP:USER_NOT_MEMBER');
-    }
-
-    if (member.softDeletedAt) {
-      throw new ForbiddenException('GROUP:USER_LEFT_GROUP');
-    }
-
-    const { cipheredContent, iv, authTag } = this.cipherMessage(content);
-
     return AppDataSource.transaction(async (manager) => {
+      const replay = await this.findReplay(manager, senderId, clientMessageId);
+      if (replay) {
+        if (
+          replay.conversationId !== conversationId ||
+          replay.conversation.type !== ConversationType.GROUP
+        ) {
+          throw new ForbiddenException('MESSAGE:CLIENT_ID_ALREADY_USED');
+        }
+        return {
+          savedMessage: {
+            ...replay,
+            content: this.decipherMessage(replay.cipheredContent, replay.iv, replay.authTag),
+            savedAttachments: replay.attachments,
+          },
+          members: [],
+          replayed: true,
+          groupName: replay.conversation.name,
+          senderName: undefined,
+        };
+      }
+      const [conversation, member, members] = await Promise.all([
+        ConversationRepository.findById(conversationId, manager),
+        ConversationMemberRepository.findMember(conversationId, senderId, manager),
+        ConversationMemberRepository.getMembers(conversationId, manager),
+      ]);
+
+      if (!conversation) {
+        throw new NotFoundException('GROUP:NOT_FOUND');
+      }
+
+      if (conversation.type !== ConversationType.GROUP) {
+        throw new ForbiddenException('GROUP:INVALID_CONVERSATION_TYPE');
+      }
+
+      if (!member) {
+        throw new ForbiddenException('GROUP:USER_NOT_MEMBER');
+      }
+
+      if (member.softDeletedAt) {
+        throw new ForbiddenException('GROUP:USER_LEFT_GROUP');
+      }
+
+      const { cipheredContent, iv, authTag } = this.cipherMessage(content);
+
       const message = MessageRepository.create({
         conversationId,
         senderId,
+        clientMessageId,
         cipheredContent,
         iv,
         authTag,
@@ -224,7 +320,16 @@ class MessageService {
       const savedAttachments = await MessageAttachmentRepository.findByMessageId(id, manager);
 
       return {
-        savedMessage: { id, createdAt, senderId, conversationId, content, savedAttachments },
+        savedMessage: {
+          id,
+          createdAt,
+          senderId,
+          conversationId,
+          content,
+          savedAttachments,
+          deliveries,
+        },
+        replayed: false,
         members,
         groupName: conversation.name,
         senderName: member.user.username,
@@ -261,12 +366,16 @@ class MessageService {
 
     const history = [
       ...messages.map((message) => {
-        const { cipheredContent, iv, authTag, ...rest } = message;
+        const { cipheredContent, iv, authTag, deliveries, clientMessageId, ...rest } = message;
         const content = this.decipherMessage(cipheredContent, iv, authTag);
         return {
           ...rest,
           content,
           type: 'MESSAGE',
+          ...(message.senderId === userId && clientMessageId ? { clientMessageId } : {}),
+          deliveries: deliveries
+            .filter((delivery) => message.senderId === userId || delivery.userId === userId)
+            .map(({ userId, status }) => ({ userId, status })),
         };
       }),
       ...events,
@@ -287,24 +396,26 @@ class MessageService {
   }
 
   async confirmDelivery(userId: string, { conversationId, messageId, status }: MessageDeliveryDto) {
-    const delivery = await MessageDeliveryRepository.findByMessageAndUser(messageId, userId);
-
-    if (!delivery) {
-      throw new NotFoundException('COMFIRM_DELIVERY:DELIVERY_NOT_FOUND');
-    }
-
-    if (status === MessageStatus.READ) {
-      await ConversationMemberRepository.resetUnreadCount(conversationId, userId);
-    }
-
-    await MessageDeliveryRepository.updateDeliveryStatus(delivery.id, {
-      status,
-      ...(status === MessageStatus.DELIVERED
-        ? { deliveredAt: new Date() }
-        : { readAt: new Date() }),
+    return AppDataSource.transaction(async (manager) => {
+      const delivery = await MessageDeliveryRepository.findByMessageAndUser(
+        messageId,
+        userId,
+        manager
+      );
+      if (!delivery || delivery.message.conversationId !== conversationId) {
+        throw new NotFoundException('CONFIRM_DELIVERY:DELIVERY_NOT_FOUND');
+      }
+      const changed = await MessageDeliveryRepository.advanceStatus(delivery.id, status, manager);
+      if (changed && status === MessageStatus.READ) {
+        await ConversationMemberRepository.decrementUnreadCount(
+          conversationId,
+          userId,
+          delivery.message.createdAt,
+          manager
+        );
+      }
+      return { delivery, changed };
     });
-
-    return delivery;
   }
 
   async deleteMessages(dto: DeleteMessagesDto) {

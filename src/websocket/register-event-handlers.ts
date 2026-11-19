@@ -1,5 +1,7 @@
 import { createEventDispatcher } from './dispatcher';
-import { WS_CLIENT_EVENTS } from '@constants';
+import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '@constants';
+import { requireAuthentication } from './authenticate-guard';
+import { sendMessage } from './send-message';
 
 import {
   PrivateMessageDto,
@@ -48,6 +50,11 @@ import {
  */
 export function registerEventHandlers() {
   const dispatcher = createEventDispatcher();
+
+  dispatcher.register(WS_CLIENT_EVENTS.WS_PING, async ({ connection }) => {
+    requireAuthentication(connection);
+    sendMessage(connection, { type: WS_SERVER_EVENTS.WS_PONG, data: null });
+  });
 
   dispatcher.register<PrivateMessageDto>(
     WS_CLIENT_EVENTS.SEND_PRIVATE_MESSAGE,

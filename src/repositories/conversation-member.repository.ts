@@ -24,8 +24,9 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
     );
   },
 
-  async findMember(conversationId: string, userId: string) {
-    return this.findOne({
+  async findMember(conversationId: string, userId: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(ConversationMember) : this;
+    return repository.findOne({
       where: {
         conversationId,
         userId,
@@ -140,6 +141,22 @@ export const ConversationMemberRepository = AppDataSource.getRepository(Conversa
       'unreadCount',
       1
     );
+  },
+
+  async decrementUnreadCount(
+    conversationId: string,
+    userId: string,
+    createdAt: Date,
+    manager: EntityManager
+  ) {
+    await manager
+      .getRepository(ConversationMember)
+      .createQueryBuilder()
+      .update()
+      .set({ unreadCount: () => 'GREATEST(unread_count - 1, 0)' })
+      .where('conversation_id = :conversationId AND user_id = :userId', { conversationId, userId })
+      .andWhere('(empty_messages_at IS NULL OR empty_messages_at < :createdAt)', { createdAt })
+      .execute();
   },
 
   async resetUnreadCount(conversationId: string, userId: string, manager?: EntityManager) {

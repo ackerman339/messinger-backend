@@ -10,6 +10,7 @@ import { registerEventHandlers } from './register-event-handlers';
 import { presenceHandler } from './handlers/presence-handler';
 import { callDisconnectHandler } from './handlers/call-disconnect';
 import { sendError } from './send-error';
+import { sendMessage } from './send-message';
 
 export interface CreateWebSocketServerOptions {
   server: Server;
@@ -30,14 +31,22 @@ type WsAuthParams = {
 
 async function authenticate({ connection, socket, userId, sessionId }: WsAuthParams) {
   // The socket may have closed during authentication.
-  if (socket.readyState !== WebSocket.OPEN) {
+  if (socket.readyState !== WebSocket.OPEN || connection.userId) {
     return;
   }
 
   connectionManager.attachUser(connection, userId);
   connection.sessionId = sessionId;
 
-  await offlineSyncService.syncPendingMessages(userId);
+  sendMessage(connection, { type: WS_SERVER_EVENTS.WS_AUTHENTICATED, data: { userId } });
+
+  try {
+    await offlineSyncService.syncPendingMessages(userId, connection);
+  } catch (error) {
+    logger.error(error);
+    socket.close(1011, 'Message sync failed');
+    return;
+  }
   await offlineSyncService.syncPendingGroupInvitations(userId);
   await presenceHandler({ userId, isConnected: true });
 
@@ -101,10 +110,14 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
     socket.on('close', async (code, reason) => {
       const userId = connection.userId;
 
+      connectionManager.unregister(connection.id);
       if (userId) {
-        await presenceHandler({ userId });
-        await callDisconnectHandler(userId, connection.id);
-        connectionManager.unregister(connection.id);
+        const remaining = connectionManager.getUserConnections(userId);
+        const cleanup = [callDisconnectHandler(userId, connection.id)];
+        if (!remaining.length) cleanup.push(presenceHandler({ userId }));
+        for (const result of await Promise.allSettled(cleanup)) {
+          if (result.status === 'rejected') logger.error(result.reason);
+        }
       }
 
       logger.info(
@@ -113,6 +126,23 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
           `reason=${reason.toString()} ` +
           `Active: ${connectionManager.count()}`
       );
+    });
+
+    socket.on('message', async (raw) => {
+      try {
+        const message = parseWsMessage(raw) as WsClientMessage<{ accessToken: string }>;
+        // If client responds with token, then authenticate connection
+        if (message.type === WS_CLIENT_EVENTS.AUTH_TOKEN_SENT) {
+          const result = await authService.getWsSession(message.data.accessToken);
+          const { userId, sessionId } = result;
+          await authenticate({ connection, socket, userId, sessionId });
+          return;
+        }
+        await dispatch(connection, message);
+      } catch (error) {
+        logger.error(error);
+        sendError(connection, error);
+      }
     });
 
     try {
@@ -134,24 +164,6 @@ export function createWebSocketServer({ server }: CreateWebSocketServerOptions) 
       logger.error(error);
       sendError(connection, error);
     }
-
-    socket.on('message', async (raw) => {
-      const message = parseWsMessage(raw) as WsClientMessage<{ accessToken: string }>;
-
-      try {
-        // If client responds with token, then authenticate connection
-        if (message.type === WS_CLIENT_EVENTS.AUTH_TOKEN_SENT) {
-          const result = await authService.getWsSession(message.data.accessToken);
-          const { userId, sessionId } = result;
-          await authenticate({ connection, socket, userId, sessionId });
-          return;
-        }
-        await dispatch(connection, message);
-      } catch (error) {
-        logger.error(error);
-        sendError(connection, error);
-      }
-    });
   });
 
   /**

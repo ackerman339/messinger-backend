@@ -1,6 +1,7 @@
-import { WsHandlers } from '@appTypes';
-import { WS_SERVER_EVENTS } from '@constants';
+import { MessageStatus, WsHandlers } from '@appTypes';
+import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '@constants';
 import { MessageDeliverySchema, MessageDeliveryDto } from '@dtos';
+import { BadRequestException } from '@exceptions';
 import { messageService } from '@services';
 import { connectionManager } from '../managers/connection-manager';
 import { requireAuthentication } from '../authenticate-guard';
@@ -11,23 +12,24 @@ export async function messageDeliveryHandler({
   message,
 }: WsHandlers<MessageDeliveryDto>) {
   requireAuthentication(connection);
-
   const validated = MessageDeliverySchema.parse(message.data);
-  const delivery = await messageService.confirmDelivery(connection.userId!, {
-    ...validated,
-  });
+  const expected =
+    message.type === WS_CLIENT_EVENTS.MESSAGE_READ ? MessageStatus.READ : MessageStatus.DELIVERED;
+  if (validated.status !== expected) throw new BadRequestException('MESSAGE:INVALID_RECEIPT_EVENT');
+  const { delivery, changed } = await messageService.confirmDelivery(connection.userId!, validated);
 
-  // Notify sender.
-  const senderConnections = connectionManager.getUserConnections(delivery.message.senderId);
+  if (changed) {
+    const data = { ...validated, userId: delivery.userId };
+    for (const sender of connectionManager.getUserConnections(delivery.message.senderId)) {
+      sendMessage(sender, { type: WS_SERVER_EVENTS.MESSAGE_STATUS_UPDATED, data });
+    }
+  }
 
-  for (const senderConnection of senderConnections) {
-    sendMessage(senderConnection, {
-      type: WS_SERVER_EVENTS.MESSAGE_STATUS_UPDATED,
-      data: {
-        messageId: delivery.messageId,
-        userId: delivery.userId,
-        status: validated.status,
-      },
+  if (message.requestId) {
+    sendMessage(connection, {
+      type: WS_SERVER_EVENTS.MESSAGE_RECEIPT_CONFIRMED,
+      requestId: message.requestId,
+      data: validated,
     });
   }
 }

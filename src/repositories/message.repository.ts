@@ -84,6 +84,7 @@ export const MessageRepository = AppDataSource.getRepository(Message).extend({
       where,
       relations: {
         attachments: true,
+        deliveries: true,
       },
       order: {
         createdAt: 'DESC',

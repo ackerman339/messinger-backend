@@ -1,3 +1,4 @@
+import type { EntityManager } from 'typeorm';
 import { addHours, isAfter } from 'date-fns';
 import { AppDataSource } from '@config/database';
 import { createHash } from 'node:crypto';
@@ -9,7 +10,7 @@ import {
 } from '@appTypes';
 import { ForbiddenException, NotFoundException } from '@exceptions';
 import { groupEvents } from '@events';
-import { Conversation, ConversationMember, GroupInvitation } from '@entities';
+import { Conversation, ConversationMember, GroupInvitation, User } from '@entities';
 import { messageService } from '@services';
 import { groupCallService } from './group-call.service';
 import { paginate } from '@utils';
@@ -106,51 +107,50 @@ class ConversationService {
     return ConversationRole.MEMBER;
   }
 
-  async getOrCreatePrivateConversation({ type, creatorId, members }: CreateConversationParams) {
+  async getOrCreatePrivateConversation(
+    params: CreateConversationParams,
+    manager: EntityManager
+  ): Promise<Conversation | null> {
+    const { type, creatorId, members } = params;
     let privateKey: string | null = null;
     const uniqueMembers = this.normalizeMembers(creatorId, members);
+    const repository = manager.getRepository(Conversation);
 
-    // Prevent duplicate private conversations.
     if (type === ConversationType.PRIVATE) {
       if (uniqueMembers.length > 2) {
         throw new ForbiddenException('CREATE_CONVERSATION:PRIVATE_CONVERSATION_REQUIRES_TWO_USERS');
       }
-
       privateKey = this.generatePrivateKey(uniqueMembers);
-      const existing = await ConversationRepository.findByPrivateKey(privateKey);
-
-      if (existing) {
-        return existing;
+      await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        `private:${privateKey}`,
+      ]);
+      const existing = await repository.findOne({
+        where: { privateKey },
+        relations: { members: { user: true } },
+      });
+      if (existing) return existing;
+      for (const id of uniqueMembers) {
+        if (!(await manager.getRepository(User).existsBy({ id }))) {
+          throw new NotFoundException('CONVERSATION:USER_NOT_FOUND');
+        }
       }
     }
 
-    return AppDataSource.transaction(async (manager) => {
-      const newConversation = ConversationRepository.create({
-        type,
-        privateKey,
-      });
-
-      const savedConversation = await ConversationRepository.saveConversation(
-        newConversation,
-        manager
-      );
-
-      const conversationMembers = uniqueMembers.map((userId) => ({
+    const savedConversation = await ConversationRepository.saveConversation(
+      ConversationRepository.create({ type, privateKey }),
+      manager
+    );
+    await ConversationMemberRepository.bulkCreate(
+      uniqueMembers.map((userId) => ({
         userId,
         conversationId: savedConversation.id,
         role: this.getMemberRole({ type, userId, creatorId }),
-      }));
-
-      await ConversationMemberRepository.bulkCreate(conversationMembers, manager);
-
-      return manager.getRepository(Conversation).findOne({
-        where: { id: savedConversation.id },
-        relations: {
-          members: {
-            user: true,
-          },
-        },
-      });
+      })),
+      manager
+    );
+    return repository.findOne({
+      where: { id: savedConversation.id },
+      relations: { members: { user: true } },
     });
   }
 

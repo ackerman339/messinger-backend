@@ -9,8 +9,9 @@ export const ConversationRepository = AppDataSource.getRepository(Conversation).
     return repository.save(conversation);
   },
 
-  async findById(id: string) {
-    return this.findOne({ where: { id }, relations: { members: true } });
+  async findById(id: string, manager?: EntityManager) {
+    const repository = manager ? manager.getRepository(Conversation) : this;
+    return repository.findOne({ where: { id }, relations: { members: true } });
   },
 
   async findByPrivateKey(privateKey: string) {

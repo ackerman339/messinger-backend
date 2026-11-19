@@ -1,10 +1,9 @@
 import { EntityManager } from 'typeorm';
 import { AppDataSource } from '@config/database';
 import { MessageDelivery } from '@entities';
+import { MessageStatus } from '@appTypes';
 
 type DeliveryInput = Pick<MessageDelivery, 'messageId' | 'userId' | 'status'>;
-
-type DeliveryStatusInput = Partial<Pick<MessageDelivery, 'status' | 'deliveredAt' | 'readAt'>>;
 
 export const MessageDeliveryRepository = AppDataSource.getRepository(MessageDelivery).extend({
   async createDeliveries(deliveries: DeliveryInput[], manager?: EntityManager) {
@@ -29,8 +28,8 @@ export const MessageDeliveryRepository = AppDataSource.getRepository(MessageDeli
     });
   },
 
-  async findByMessageAndUser(messageId: string, userId: string) {
-    return this.findOne({
+  async findByMessageAndUser(messageId: string, userId: string, manager: EntityManager) {
+    return manager.getRepository(MessageDelivery).findOne({
       where: {
         messageId,
         userId,
@@ -39,7 +38,26 @@ export const MessageDeliveryRepository = AppDataSource.getRepository(MessageDeli
     });
   },
 
-  async updateDeliveryStatus(id: string, data: DeliveryStatusInput) {
-    return this.update(id, data);
+  async advanceStatus(
+    id: string,
+    status: MessageStatus.DELIVERED | MessageStatus.READ,
+    manager: EntityManager
+  ) {
+    const read = status === MessageStatus.READ;
+    const result = await manager
+      .getRepository(MessageDelivery)
+      .createQueryBuilder()
+      .update()
+      .set({
+        status,
+        deliveredAt: () => 'COALESCE(delivered_at, CURRENT_TIMESTAMP)',
+        ...(read ? { readAt: () => 'CURRENT_TIMESTAMP' } : {}),
+      })
+      .where('id = :id', { id })
+      .andWhere('status IN (:...previous)', {
+        previous: read ? [MessageStatus.SENT, MessageStatus.DELIVERED] : [MessageStatus.SENT],
+      })
+      .execute();
+    return (result.affected ?? 0) > 0;
   },
 });

@@ -16,6 +16,7 @@ import { MessageAttachment } from './message-attrachment.entity';
 
 @Entity('messages')
 @Index('idx_messages_conversation_id_user_id', ['conversationId', 'createdAt'])
+@Index('uq_messages_sender_client_id', ['senderId', 'clientMessageId'], { unique: true })
 export class Message {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -30,6 +31,9 @@ export class Message {
     nullable: true,
   })
   senderId: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  clientMessageId: string | null;
 
   @Column({
     type: 'text',

@@ -9,6 +9,7 @@ export const MessageAttachmentSchema = z.object({
 });
 
 const MessageContentSchema = z.object({
+  clientMessageId: z.uuid().optional(),
   content: z.string().min(1).max(5000),
   attachments: z.array(MessageAttachmentSchema).max(10).default([]),
 });
