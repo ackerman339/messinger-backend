@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { WS_SERVER_EVENTS, WS_CLIENT_EVENTS } from '@constants';
 import { Connection, WsClientMessage } from '@appTypes';
 import { logger } from '@config/logger';
-import { authService, offlineSyncService } from '@services';
+import { authService, messageService, offlineSyncService } from '@services';
 import { connectionManager } from './managers/connection-manager';
 import { parseWsMessage } from './message-parser';
 import { registerEventHandlers } from './register-event-handlers';
@@ -42,6 +42,9 @@ async function authenticate({ connection, socket, userId, sessionId }: WsAuthPar
 
   try {
     await offlineSyncService.syncPendingMessages(userId, connection);
+    for (const data of await messageService.getRecentLiveLocations(userId)) {
+      sendMessage(connection, { type: WS_SERVER_EVENTS.LOCATION_UPDATED, data });
+    }
   } catch (error) {
     logger.error(error);
     socket.close(1011, 'Message sync failed');

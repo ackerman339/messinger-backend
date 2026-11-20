@@ -24,6 +24,7 @@ export async function groupMessageHandler({ connection, message }: WsHandlers<Gr
     messageId: savedMessage.id,
     conversationId,
     content: savedMessage.content,
+    ...(savedMessage.location ? { location: savedMessage.location } : {}),
     createdAt: savedMessage.createdAt,
     attachments: savedMessage.savedAttachments,
   };

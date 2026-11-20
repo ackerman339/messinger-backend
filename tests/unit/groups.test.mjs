@@ -198,7 +198,10 @@ test('group deletion notifies each member by user ID', () => {
 function groupMessageFixture({ groupName = 'Equipo', persistenceError } = {}) {
   const zod = require('zod');
   const { WebSocket } = require('ws');
-  const { GroupMessageSchema } = load('dtos/websocket/message.dto', { zod });
+  const { GroupMessageSchema } = load('dtos/websocket/message.dto', {
+    zod,
+    './location.dto': load('dtos/websocket/location.dto', { zod }),
+  });
   const { PushNotificationSchema } = load('dtos/push-notification', { zod });
   const conversationId = crypto.randomUUID();
   const messageId = crypto.randomUUID();

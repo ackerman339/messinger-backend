@@ -22,14 +22,10 @@ class OfflineSyncService {
         (member.emptyMessagesAt && message.createdAt <= member.emptyMessagesAt)
       )
         continue;
-      const content = messageService.decipherMessage(
-        message.cipheredContent,
-        message.iv,
-        message.authTag
-      );
+      const content = messageService.decodeContent(message);
       sendMessage(connection, {
         type: WS_SERVER_EVENTS.NEW_MESSAGE,
-        data: messageService.serializeMessage({ ...message, content }, message.conversation),
+        data: messageService.serializeMessage({ ...message, ...content }, message.conversation),
       });
     }
   }

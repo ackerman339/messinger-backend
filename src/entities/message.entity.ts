@@ -17,6 +17,9 @@ import { MessageAttachment } from './message-attrachment.entity';
 @Entity('messages')
 @Index('idx_messages_conversation_id_user_id', ['conversationId', 'createdAt'])
 @Index('uq_messages_sender_client_id', ['senderId', 'clientMessageId'], { unique: true })
+@Index('idx_messages_location_expiration', ['locationExpiresAt'], {
+  where: 'location_expires_at IS NOT NULL',
+})
 export class Message {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -51,6 +54,15 @@ export class Message {
     length: 32,
   })
   authTag: string;
+
+  @Column({ type: 'boolean', default: false })
+  isLocation: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  locationExpiresAt: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  locationStoppedAt: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

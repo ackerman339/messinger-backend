@@ -23,7 +23,7 @@ function matchesDate(date, condition) {
 }
 function fixture(messages, events, deletedIds = [], cutoffs = {}) {
   const rows = {
-    Message: messages.map((item) => ({ conversationId: 'conversation', ...item })),
+    Message: messages.map((item) => ({ conversationId: 'conversation', deliveries: [], ...item })),
     ConversationEvent: events.map((item) => ({ conversationId: 'conversation', ...item })),
   };
   const repositories = Object.fromEntries(

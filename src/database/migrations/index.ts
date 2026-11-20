@@ -19,3 +19,4 @@ export * from './1794675600000-CallHistoryDeletionMigration';
 export * from './1795000000000-GroupCallsMigration';
 export * from './1795001000000-GroupCallRingingMigration';
 export * from './1795002000000-MessageReceiptsMigration';
+export * from './1795003000000-LocationMessagesMigration';

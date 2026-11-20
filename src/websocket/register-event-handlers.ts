@@ -1,3 +1,4 @@
+import { locationStopHandler, locationUpdateHandler } from './handlers/location';
 import { createEventDispatcher } from './dispatcher';
 import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '@constants';
 import { requireAuthentication } from './authenticate-guard';
@@ -50,6 +51,8 @@ import {
  */
 export function registerEventHandlers() {
   const dispatcher = createEventDispatcher();
+  dispatcher.register(WS_CLIENT_EVENTS.LOCATION_UPDATE, locationUpdateHandler);
+  dispatcher.register(WS_CLIENT_EVENTS.LOCATION_STOP, locationStopHandler);
 
   dispatcher.register(WS_CLIENT_EVENTS.WS_PING, async ({ connection }) => {
     requireAuthentication(connection);

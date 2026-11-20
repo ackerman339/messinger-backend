@@ -1,6 +1,6 @@
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
-import { Message } from '@entities';
+import { ConversationMember, Message } from '@entities';
 import { env } from '@config/environment';
 import { AppDataSource } from '@config/database';
 import { MessageStatus, ConversationType } from '@appTypes';
@@ -13,6 +13,9 @@ import {
   MessageDeliveryDto,
   GetConversationMessagesDto,
   DeleteMessagesDto,
+  LocationInput,
+  LocationPoint,
+  LocationState,
 } from '@dtos';
 
 import {
@@ -57,6 +60,33 @@ class MessageService {
     return decrypted.toString('utf8');
   }
 
+  decodeContent(
+    message: Pick<Message, 'cipheredContent' | 'iv' | 'authTag'> &
+      Partial<Pick<Message, 'isLocation' | 'locationExpiresAt' | 'locationStoppedAt'>>
+  ): { content: string; location?: LocationState } {
+    const decoded = this.decipherMessage(message.cipheredContent, message.iv, message.authTag);
+    if (!message.isLocation) return { content: decoded };
+    const point = JSON.parse(decoded) as LocationPoint;
+    return {
+      content: message.locationExpiresAt ? 'Ubicación en tiempo real' : 'Ubicación compartida',
+      location: {
+        ...point,
+        ...(message.locationExpiresAt ? { expiresAt: message.locationExpiresAt.getTime() } : {}),
+        ...(message.locationStoppedAt ? { stoppedAt: message.locationStoppedAt.getTime() } : {}),
+      },
+    };
+  }
+
+  private encodeContent(content: string, location?: LocationInput) {
+    if (!location) return this.cipherMessage(content);
+    const { expiresAt, ...point } = location;
+    return {
+      ...this.cipherMessage(JSON.stringify(point)),
+      isLocation: true,
+      locationExpiresAt: expiresAt ? new Date(expiresAt) : null,
+    };
+  }
+
   private async findReplay(manager: EntityManager, senderId: string, clientMessageId?: string) {
     if (!clientMessageId) return null;
     // Serialize retries across sockets and server instances before any message side effects.
@@ -72,6 +102,7 @@ class MessageService {
   serializeMessage(
     message: Pick<Message, 'id' | 'createdAt' | 'senderId' | 'conversationId' | 'attachments'> & {
       content: string;
+      location?: LocationState;
     },
     conversation?: Message['conversation']
   ) {
@@ -83,6 +114,7 @@ class MessageService {
       conversationId,
       createdAt,
       content,
+      ...(message.location ? { location: message.location } : {}),
       attachments,
       type: 'MESSAGE' as const,
     };
@@ -113,7 +145,7 @@ class MessageService {
 
   async createPrivateMessage(
     senderId: string,
-    { receiverId, content, attachments, clientMessageId }: PrivateMessageDto
+    { receiverId, content, attachments, clientMessageId, location }: PrivateMessageDto
   ) {
     return AppDataSource.transaction(async (manager) => {
       const replay = await this.findReplay(manager, senderId, clientMessageId);
@@ -130,12 +162,12 @@ class MessageService {
           replayed: true,
           savedMessage: {
             ...replay,
-            content: this.decipherMessage(replay.cipheredContent, replay.iv, replay.authTag),
+            ...this.decodeContent(replay),
             senderName: undefined,
           },
         };
       }
-      const { cipheredContent, iv, authTag } = this.cipherMessage(content);
+      const encoded = this.encodeContent(content, location);
       const conversation = await conversationService.getOrCreatePrivateConversation(
         {
           type: ConversationType.PRIVATE,
@@ -167,9 +199,7 @@ class MessageService {
         conversationId: conversation.id,
         senderId,
         clientMessageId,
-        cipheredContent,
-        iv,
-        authTag,
+        ...encoded,
       });
 
       const savedMessage = await MessageRepository.saveMessage(newMessage, manager);
@@ -216,7 +246,7 @@ class MessageService {
           conversation,
           conversationId: conversation.id,
           createdAt,
-          content,
+          ...this.decodeContent(savedMessage),
           attachments: savedAttachments,
           deliveries,
           senderName: sender?.user.username,
@@ -227,7 +257,7 @@ class MessageService {
 
   async createGroupMessage(
     senderId: string,
-    { conversationId, content, attachments, clientMessageId }: GroupMessageDto
+    { conversationId, content, attachments, clientMessageId, location }: GroupMessageDto
   ) {
     return AppDataSource.transaction(async (manager) => {
       const replay = await this.findReplay(manager, senderId, clientMessageId);
@@ -241,7 +271,7 @@ class MessageService {
         return {
           savedMessage: {
             ...replay,
-            content: this.decipherMessage(replay.cipheredContent, replay.iv, replay.authTag),
+            ...this.decodeContent(replay),
             savedAttachments: replay.attachments,
           },
           members: [],
@@ -272,15 +302,13 @@ class MessageService {
         throw new ForbiddenException('GROUP:USER_LEFT_GROUP');
       }
 
-      const { cipheredContent, iv, authTag } = this.cipherMessage(content);
+      const encoded = this.encodeContent(content, location);
 
       const message = MessageRepository.create({
         conversationId,
         senderId,
         clientMessageId,
-        cipheredContent,
-        iv,
-        authTag,
+        ...encoded,
       });
 
       const savedMessage = await MessageRepository.saveMessage(message, manager);
@@ -325,7 +353,7 @@ class MessageService {
           createdAt,
           senderId,
           conversationId,
-          content,
+          ...this.decodeContent(savedMessage),
           savedAttachments,
           deliveries,
         },
@@ -366,11 +394,22 @@ class MessageService {
 
     const history = [
       ...messages.map((message) => {
-        const { cipheredContent, iv, authTag, deliveries, clientMessageId, ...rest } = message;
-        const content = this.decipherMessage(cipheredContent, iv, authTag);
+        const {
+          deliveries,
+          clientMessageId,
+          id,
+          senderId,
+          createdAt,
+          conversationId,
+          attachments,
+        } = message;
         return {
-          ...rest,
-          content,
+          id,
+          senderId,
+          createdAt,
+          conversationId,
+          attachments,
+          ...this.decodeContent(message),
           type: 'MESSAGE',
           ...(message.senderId === userId && clientMessageId ? { clientMessageId } : {}),
           deliveries: deliveries
@@ -393,6 +432,90 @@ class MessageService {
       page,
       nextCursor,
     };
+  }
+
+  async updateLiveLocation(userId: string, messageId: string, point?: LocationPoint) {
+    return AppDataSource.transaction(async (manager) => {
+      const messages = manager.getRepository(Message);
+      const message = await messages.findOne({
+        where: { id: messageId, senderId: userId, isLocation: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!message?.locationExpiresAt) throw new NotFoundException('LOCATION:NOT_FOUND');
+
+      const membership = await ConversationMemberRepository.findMember(
+        message.conversationId,
+        userId,
+        manager
+      );
+      if (!membership || membership.softDeletedAt)
+        throw new ForbiddenException('LOCATION:NOT_MEMBER');
+
+      const before = this.decodeContent(message).location!;
+      if (!point) {
+        if (!message.locationStoppedAt) {
+          message.locationStoppedAt = new Date();
+          await messages.update(message.id, { locationStoppedAt: message.locationStoppedAt });
+        }
+      } else {
+        if (message.locationStoppedAt || message.locationExpiresAt.getTime() <= Date.now()) {
+          throw new ForbiddenException('LOCATION:ENDED');
+        }
+        if (point.capturedAt <= before.capturedAt) return null;
+        const encrypted = this.cipherMessage(JSON.stringify(point));
+        await messages.update(message.id, encrypted);
+        Object.assign(message, encrypted);
+      }
+
+      const members = await manager
+        .getRepository(ConversationMember)
+        .createQueryBuilder('member')
+        .where('member.conversationId = :conversationId', {
+          conversationId: message.conversationId,
+        })
+        .andWhere('member.softDeletedAt IS NULL')
+        .andWhere('(member.emptyMessagesAt IS NULL OR member.emptyMessagesAt < :createdAt)', {
+          createdAt: message.createdAt,
+        })
+        .andWhere(
+          `(member.userId = :userId OR EXISTS (
+          SELECT 1 FROM message_deliveries delivery
+          WHERE delivery.message_id = :messageId AND delivery.user_id = member.user_id
+        ))`,
+          { userId, messageId }
+        )
+        .getMany();
+      return {
+        memberIds: members.map((member) => member.userId),
+        data: { messageId, location: this.decodeContent(message).location! },
+      };
+    });
+  }
+
+  async getRecentLiveLocations(userId: string) {
+    const messages = await MessageRepository.createQueryBuilder('message')
+      .innerJoin(
+        ConversationMember,
+        'member',
+        `
+        member.conversationId = message.conversationId AND member.userId = :userId
+        AND member.softDeletedAt IS NULL
+        AND (member.emptyMessagesAt IS NULL OR member.emptyMessagesAt < message.createdAt)
+      `,
+        { userId }
+      )
+      .where('message.locationExpiresAt > NOW()')
+      .andWhere(
+        `(message.senderId = :userId OR EXISTS (
+        SELECT 1 FROM message_deliveries delivery
+        WHERE delivery.message_id = message.id AND delivery.user_id = :userId
+      ))`
+      )
+      .getMany();
+    return messages.map((message) => ({
+      messageId: message.id,
+      location: this.decodeContent(message).location!,
+    }));
   }
 
   async confirmDelivery(userId: string, { conversationId, messageId, status }: MessageDeliveryDto) {
